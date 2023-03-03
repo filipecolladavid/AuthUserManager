@@ -3,7 +3,7 @@ from bson.objectid import ObjectId
 from fastapi import APIRouter, Response, status, Depends, HTTPException
 
 from src import oauth2
-from ..models.user import User, Login, Register, UserResponse
+from ..models.user import User, Login, Register, UserResponse, Previleges
 from .. import utils
 from src.oauth2 import AuthJWT
 from ..config.settings import settings
@@ -14,7 +14,7 @@ ACCESS_TOKEN_EXPIRES_IN = settings.ACCESS_TOKEN_EXPIRES_IN
 REFRESH_TOKEN_EXPIRES_IN = settings.REFRESH_TOKEN_EXPIRES_IN
 
 
-# Register new User - to be removed if webapp is private
+# Register new User - First user get's admin status
 @router.post('/register', status_code=status.HTTP_201_CREATED, response_model=UserResponse)
 async def create_user(credentials: Register):
 
@@ -24,20 +24,37 @@ async def create_user(credentials: Register):
             detail='Invalid email'
         )
 
-    user_exists = await User.find_one(User.username == credentials.username)
-    email_exists = await User.find_one(User.email == credentials.email)
-    if user_exists or email_exists:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Account already exists'
+    new_user = ""
+
+    size = await User.count()
+    print(size)
+    if (size == 0):
+        new_user = User(
+            username=credentials.username,
+            email=credentials.email.lower(),
+            password=utils.hash_password(credentials.password),
+            verified=True,
+            privileges=Previleges.ADMIN,
+            created_at=datetime.utcnow()
         )
 
-    new_user = User(
-        username=credentials.username,
-        email=credentials.email.lower(),
-        password=utils.hash_password(credentials.password),
-        created_at=datetime.utcnow()
-    )
+    else:
+        user_exists = await User.find_one(User.username == credentials.username)
+        email_exists = await User.find_one(User.email == credentials.email)
+        if user_exists or email_exists:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='Account already exists'
+            )
+
+        new_user = User(
+            username=credentials.username,
+            email=credentials.email.lower(),
+            password=utils.hash_password(credentials.password),
+            verified=False,
+            privileges=Previleges.PENDING,
+            created_at=datetime.utcnow()
+        )
 
     await new_user.create()
 
