@@ -10,7 +10,7 @@ from beanie import Document
 # - pending: To be accepted by admin -> verified: false
 
 
-class Previleges:
+class Privileges:
     ADMIN = "admin"
     CREATOR = "creator"
     VISITOR = "visitor"
@@ -32,6 +32,10 @@ class UserResponse(BaseModel):
     username: str
     email: str
     pic_url: str
+
+class UserPrivileges(BaseModel):
+    username: str
+    privileges: str
 
 # This is the model that will be saved to the database
 class User(Document):

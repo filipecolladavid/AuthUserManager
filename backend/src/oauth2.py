@@ -46,6 +46,8 @@ async def require_admin(Authorize: AuthJWT = Depends()):
 
         user = await User.get(str(user_id))
 
+        print(user)
+
         if not user:
             raise UserNotFound('User not found')
         if user.privileges != "admin":

@@ -3,7 +3,7 @@ from bson.objectid import ObjectId
 from fastapi import APIRouter, Response, status, Depends, HTTPException
 
 from src import oauth2
-from ..models.user import User, Login, Register, UserResponse, Previleges
+from ..models.user import User, Login, Register, UserResponse, Privileges
 from .. import utils
 from src.oauth2 import AuthJWT
 from ..config.settings import settings
@@ -34,7 +34,7 @@ async def create_user(credentials: Register):
             email=credentials.email.lower(),
             password=utils.hash_password(credentials.password),
             verified=True,
-            privileges=Previleges.ADMIN,
+            privileges=Privileges.ADMIN,
             created_at=datetime.utcnow()
         )
 
@@ -52,7 +52,7 @@ async def create_user(credentials: Register):
             email=credentials.email.lower(),
             password=utils.hash_password(credentials.password),
             verified=False,
-            privileges=Previleges.PENDING,
+            privileges=Privileges.PENDING,
             created_at=datetime.utcnow()
         )
 
