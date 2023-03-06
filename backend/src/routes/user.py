@@ -1,5 +1,11 @@
+import os
 from typing import List
-from fastapi import APIRouter, Depends, Response, status, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, status, HTTPException
+from urllib import parse
+from minio import InvalidResponseError
+
+from src.config.settings import Allowed_types, MinioBaseUrl
+from src.config.storage import minio_client, bucket_thumbnails
 
 from ..models.user import User, UserResponse, Privileges, UserPrivileges
 from .. import oauth2
@@ -19,7 +25,7 @@ async def get_me(user_id: str = Depends(oauth2.require_user)):
     return r_user
 
 
-@router.get('/user/{username}', response_model=User)
+@router.get('/get/{username}', response_model=User)
 async def get_user_info(username: str, user_id: str = Depends(oauth2.require_admin)):
     print(username)
     user = await User.find_one(User.username == username)
@@ -32,7 +38,7 @@ async def get_user_info(username: str, user_id: str = Depends(oauth2.require_adm
     return user
 
 
-@router.get('/all', response_model=List[User])
+@router.get('/get', response_model=List[User])
 async def get_all(user_id: str = Depends(oauth2.require_admin)):
     # Find all documents in the collection
     all_users_cursor = User.find({})
@@ -97,5 +103,57 @@ async def change_user_previleges(data: UserPrivileges, user_id: str = Depends(oa
     user.privileges = privileges
 
     await user.save()
-    
+
     return user
+
+
+@router.post('/profile_pic/', response_model=UserResponse)
+async def change_profile_picture(username: str, img: UploadFile, user_id: str = Depends(oauth2.require_user)):
+    # To be changed
+    user = await User.find_one(User.username == username)
+
+    # Requesting the change
+    req_user = await User.get(str(user_id))
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if req_user.privileges != "admin" and str(user.id) != str(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Need admin privilege to change another's user profile picture",
+        )
+
+    if img.content_type not in Allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid type of file"
+        )
+
+    file_size = os.fstat(img.file.fileno()).st_size
+    file_name = username+"_thumbnail."+img.content_type.split("/")[1]
+    try:
+        minio_client.put_object(
+            bucket_thumbnails, 
+            file_name,
+            img.file, 
+            file_size, 
+            img.content_type)
+        publicUrl = MinioBaseUrl+bucket_thumbnails+"/"+parse.quote(file_name)
+    except InvalidResponseError as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=err.message
+        )
+    
+    user.pic_url = publicUrl
+    await user.save()
+
+    return UserResponse(
+        username=user.username,
+        email=user.email,
+        pic_url=user.pic_url
+    )
