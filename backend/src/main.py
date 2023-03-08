@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.config.settings import settings
 from src.config.database import startDB
 
-from src.routes import auth, user
+from src.routes import auth, items, users
 
 app = FastAPI()
 
@@ -24,12 +24,11 @@ app.add_middleware(
 @app.on_event("startup")
 async def start_dependencies():
     await startDB()
-    # await startMinio()
 
 
 app.include_router(auth.router, tags=['Auth'], prefix='/api/auth')
-app.include_router(user.router, tags=['Users'], prefix='/api/users')
-
+app.include_router(users.router, tags=['Users'], prefix='/api/users')
+app.include_router(items.router, tags=['Items'], prefix='/api/items')
 
 @app.get("/api/healthchecker")
 def root():

@@ -1,5 +1,6 @@
 from .settings import settings
 from ..models.user import User
+from src.models.items import Item
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -12,4 +13,4 @@ async def startDB():
     client = AsyncIOMotorClient(settings.DATABASE_URL)
 
     # Init beanie with the Product document class
-    await init_beanie(database=client.db_name, document_models=[User])
+    await init_beanie(database=client.db_name, document_models=[User, Item])

@@ -11,10 +11,10 @@ from beanie import Document
 
 
 class Privileges:
-    ADMIN = "admin"
-    CREATOR = "creator"
-    VISITOR = "visitor"
-    PENDING = "pending"
+    ADMIN = 3
+    CREATOR = 2
+    VISITOR = 1
+    PENDING = 0
 
 
 class Register(BaseModel):
@@ -27,15 +27,17 @@ class Login(BaseModel):
     username: str
     password: str
 
+class UserPrivileges(BaseModel):
+    username: str
+    privileges: str
 
 class UserResponse(BaseModel):
     username: str
     email: str
+    verified: bool
+    privileges: int
+    created_at: str
     pic_url: str
-
-class UserPrivileges(BaseModel):
-    username: str
-    privileges: str
 
 # This is the model that will be saved to the database
 class User(Document):
@@ -43,6 +45,6 @@ class User(Document):
     email: str
     password: str
     verified: bool
-    privileges: str
+    privileges: int
     created_at: Optional[datetime] = None
     pic_url: Optional[str] = None

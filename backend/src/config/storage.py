@@ -2,21 +2,18 @@ from minio import Minio
 from .settings import settings
 import json
 
-# One Bucket for thumbnails - "b_thumbnails"
-# Each creator, admin get's an individual bucket
-
-
 minio_client = Minio(
-   settings.MINIO_URL,
+    settings.MINIO_URL,
     access_key=settings.MINIO_ACCESS_KEY,
     secret_key=settings.MINIO_SECRET_KEY,
     secure=False
 )
 
-bucket_thumbnails = "bthumbnails"
+# Using one bucket for media access
+bucket = "media"
 
-if not minio_client.bucket_exists(bucket_thumbnails):
-    minio_client.make_bucket(bucket_thumbnails)
+if not minio_client.bucket_exists(bucket):
+    minio_client.make_bucket(bucket)
 
 bucket_policy = json.dumps(
     {
@@ -27,17 +24,17 @@ bucket_policy = json.dumps(
                 "Principal": {
                     "AWS": ["*"]
                 },
-                "Resource": [f"arn:aws:s3:::{bucket_thumbnails}"]
+                "Resource": [f"arn:aws:s3:::{bucket}"]
             }, {
                 "Action": ["s3:GetObject"],
                 "Effect": "Allow",
                 "Principal": {
                     "AWS": ["*"]
                 },
-                "Resource": [f"arn:aws:s3:::{bucket_thumbnails}/*"]
+                "Resource": [f"arn:aws:s3:::{bucket}/*"]
             }],
         "Version": "2012-10-17"
     }
 )
 
-result = minio_client.set_bucket_policy(bucket_thumbnails, bucket_policy)
+result = minio_client.set_bucket_policy(bucket, bucket_policy)

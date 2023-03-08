@@ -50,7 +50,7 @@ async def require_admin(Authorize: AuthJWT = Depends()):
 
         if not user:
             raise UserNotFound('User not found')
-        if user.privileges != "admin":
+        if user.privileges < 3:
             raise Unauthorized('This action requires admin privileges')
         if not user.verified:
             raise NotVerified('You are not verified')
