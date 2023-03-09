@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 from beanie import Document
 
@@ -19,7 +19,7 @@ class Privileges:
 
 class Register(BaseModel):
     username: str
-    email: str
+    email: EmailStr
     password: str
 
 
@@ -33,18 +33,18 @@ class UserPrivileges(BaseModel):
 
 class UserResponse(BaseModel):
     username: str
-    email: str
+    email: EmailStr
     verified: bool
     privileges: int
-    created_at: str
+    created_at: datetime
     pic_url: str
 
 # This is the model that will be saved to the database
 class User(Document):
     username: str
-    email: str
+    email: EmailStr
     password: str
     verified: bool
     privileges: int
-    created_at: Optional[datetime] = None
+    created_at: datetime
     pic_url: Optional[str] = None

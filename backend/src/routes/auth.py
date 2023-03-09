@@ -18,12 +18,6 @@ REFRESH_TOKEN_EXPIRES_IN = settings.REFRESH_TOKEN_EXPIRES_IN
 @router.post('/register', status_code=status.HTTP_201_CREATED, response_model=UserResponse)
 async def create_user(credentials: Register):
 
-    if not utils.is_valid_email(credentials.email):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid email'
-        )
-
     new_user = ""
 
     size = await User.count()
@@ -53,15 +47,17 @@ async def create_user(credentials: Register):
             password=utils.hash_password(credentials.password),
             verified=False,
             privileges=Privileges.PENDING,
-            created_at=datetime.utcnow()
+            created_at=str(datetime.utcnow())
         )
-
     await new_user.create()
 
     r_user = UserResponse(
         username=new_user.username,
         email=new_user.email,
-        pic_url=str(new_user.pic_url)
+        verified=new_user.verified,
+        privileges=new_user.privileges,
+        created_at=new_user.created_at,
+        pic_url=str(new_user.pic_url),
     )
 
     return r_user

@@ -12,8 +12,9 @@ def verify_password(password: str, hashed_password: str):
     return pwd_context.verify(password, hashed_password)
 
 
-def is_valid_email(email: str) -> bool:
-    pat = "^[a-zA-Z0-9-_]+@[a-zA-Z0-9]+\.[a-z]{1,3}$"
-    if re.match(pat, email):
-        return True
-    return False
+# def is_valid_email(email: str) -> bool:
+#     pat = "^[A-Z0-9_!#$%&'*+/=?`{|}~^-]+(?:\.[A-Z0-9_!#$%&'*+/=?`{|}~^-]+)*@[A-Z0-9-]+(?:\.[A-Z0-9-]+)*$"
+#     print(re.match(pat,email))
+#     if re.match(pat, email):
+#         return True
+#     return False
