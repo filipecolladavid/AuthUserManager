@@ -19,11 +19,12 @@ class UpdateItem(BaseModel):
     title: Optional[str]
     desc: Optional[str]
 
+
 # This is the model that will be saved to the database
 class Item(Document):
     title: str
     desc: str
     visibility: int
     author: str  # refers to author username (they're unique)
-    pic_url: str
-    created_at: Optional[datetime] = None
+    pic_url: Optional[str] = None
+    created_at: datetime

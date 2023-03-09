@@ -18,9 +18,8 @@ router = APIRouter()
 async def get_all(user_id: str = Depends(oauth2.require_admin)):
     # Find all documents in the collection
     all_users_cursor = User.find({})
-    all_users = await all_users_cursor.to_list(length=None)
 
-    return all_users
+    return await all_users_cursor.to_list(length=None)
 
 
 # Get current logged in user
@@ -64,7 +63,9 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
         )
 
     deleted_user = user
+
     await user.delete()
+
     return deleted_user
 
 

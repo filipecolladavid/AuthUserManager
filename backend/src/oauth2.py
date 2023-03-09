@@ -160,3 +160,16 @@ async def require_creator(Authorize: AuthJWT = Depends()):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail='Token is invalid or has expired')
     return user_id
+
+
+async def require_id(Authorize: AuthJWT = Depends()):
+    try:
+        Authorize.jwt_required()
+        user_id = Authorize.get_jwt_subject()
+
+        user = await User.get(str(user_id))
+
+    except Exception as e:
+        return None
+    
+    return user_id
