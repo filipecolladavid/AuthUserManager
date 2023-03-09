@@ -37,7 +37,7 @@ class UserResponse(BaseModel):
     verified: bool
     privileges: int
     created_at: datetime
-    pic_url: str
+    pic_url: Optional[str] = None
 
 # This is the model that will be saved to the database
 class User(Document):
