@@ -13,6 +13,7 @@ from .. import oauth2
 router = APIRouter()
 
 
+# Get all users
 @router.get('/', response_model=List[UserResponse])
 async def get_all(user_id: str = Depends(oauth2.require_admin)):
     # Find all documents in the collection
@@ -22,20 +23,13 @@ async def get_all(user_id: str = Depends(oauth2.require_admin)):
     return all_users
 
 
+# Get current logged in user
 @router.get('/me', response_model=UserResponse)
 async def get_me(user_id: str = Depends(oauth2.require_user)):
-
-    user = await User.get(str(user_id))
-    return UserResponse(
-        username=user.username,
-        email=user.email,
-        verified=user.verified,
-        privileges=user.privileges,
-        created_at=user.created_at,
-        pic_url=str(user.pic_url),
-    )
+    return await User.get(str(user_id))
 
 
+# Get user by username
 @router.get('/{username}', response_model=UserResponse)
 async def get_user_info(username: str, user_id: str = Depends(oauth2.require_admin)):
     print(username)
@@ -45,17 +39,10 @@ async def get_user_info(username: str, user_id: str = Depends(oauth2.require_adm
             status_code=status.HTTP_404_NOT_FOUND,
             detail='User does not exist',
         )
-
-    return UserResponse(
-        username=user.username,
-        email=user.email,
-        verified=user.verified,
-        privileges=user.privileges,
-        created_at=user.created_at,
-        pic_url=str(user.pic_url),
-    )
+    return user
 
 
+# Delete user
 @router.delete('/{username}', response_model=UserResponse)
 async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)):
     # For deletion
@@ -70,57 +57,44 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
             detail="User not found",
         )
 
-    if req_user.privileges != "admin" and str(user.id) != str(user_id):
+    if req_user.privileges < Privileges.ADMIN and str(user.id) != str(user_id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Need admin privilege to delete another user",
         )
 
-    deleted_user = UserResponse(
-        username=user.username,
-        email=user.email,
-        verified=user.verified,
-        privileges=user.privileges,
-        created_at=user.created_at,
-        pic_url=str(user.pic_url),
-    )
+    deleted_user = user
     await user.delete()
-
     return deleted_user
 
 
-@router.put('/{username}', response_model=UserResponse)
-async def update_user(username: str, user_id: str = Depends(oauth2.require_user)):
-    # For update
-    user = await User.find_one(User.username == username)
+# # Update user
+# @router.put('/{username}', response_model=UserResponse)
+# async def update_user(username: str, user_id: str = Depends(oauth2.require_user)):
+#     # For update
+#     user = await User.find_one(User.username == username)
 
-    # Requesting the change
-    req_user = await User.get(str(user_id))
+#     # Requesting the change
+#     req_user = await User.get(str(user_id))
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found",
+#         )
 
-    if req_user.privileges != "admin" and str(user.id) != str(user_id):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Need admin privilege to delete another user",
-        )
+#     if req_user.privileges != "admin" and str(user.id) != str(user_id):
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Need admin privilege to delete another user",
+#         )
 
-    # Currently can't find a need for this endpoint, but it's here in case you change the users document model
-    return UserResponse(
-        username=user.username,
-        email=user.email,
-        verified=user.verified,
-        privileges=user.privileges,
-        created_at=user.created_at,
-        pic_url=str(user.pic_url),
-    )
+#     # Currently can't find a need for this endpoint, but it's here in case you change the users document model
+#     return user
 
 
-@router.post('/{username}/verify', response_model=UserResponse)
+# Verify user - requires admin (3) privilege
+@router.patch('/{username}/verify', response_model=UserResponse)
 async def verify_user(username: str, user_id: str = Depends(oauth2.require_admin)):
     user = await User.find_one(User.username == username)
     if not user:
@@ -139,17 +113,11 @@ async def verify_user(username: str, user_id: str = Depends(oauth2.require_admin
 
     await user.save()
 
-    return UserResponse(
-        username=user.username,
-        email=user.email,
-        verified=user.verified,
-        privileges=user.privileges,
-        created_at=user.created_at,
-        pic_url=str(user.pic_url),
-    )
+    return user
 
 
-@router.post('/{username}/privileges', response_model=UserResponse)
+# Change user's privilige - requires admin (3) privilege
+@router.patch('/{username}/privileges', response_model=UserResponse)
 async def change_user_privileges(username: str, privileges: str, user_id: str = Depends(oauth2.require_admin)):
 
     user = await User.find_one(User.username == username)
@@ -196,7 +164,7 @@ async def change_user_privileges(username: str, privileges: str, user_id: str = 
     )
 
 
-@router.post('/{username}/profile_pic', response_model=UserResponse)
+@router.put('/{username}/profile_pic', response_model=UserResponse)
 async def change_profile_picture(username: str, img: UploadFile, user_id: str = Depends(oauth2.require_user)):
     # To be changed
     user = await User.find_one(User.username == username)
@@ -241,11 +209,4 @@ async def change_profile_picture(username: str, img: UploadFile, user_id: str = 
     user.pic_url = publicUrl
     await user.save()
 
-    return UserResponse(
-        username=user.username,
-        email=user.email,
-        verified=user.verified,
-        privileges=user.privileges,
-        created_at=user.created_at,
-        pic_url=str(user.pic_url),
-    )
+    return user

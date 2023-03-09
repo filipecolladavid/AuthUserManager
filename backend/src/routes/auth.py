@@ -47,20 +47,11 @@ async def create_user(credentials: Register):
             password=utils.hash_password(credentials.password),
             verified=False,
             privileges=Privileges.PENDING,
-            created_at=str(datetime.utcnow())
+            created_at=datetime.utcnow()
         )
     await new_user.create()
 
-    r_user = UserResponse(
-        username=new_user.username,
-        email=new_user.email,
-        verified=new_user.verified,
-        privileges=new_user.privileges,
-        created_at=new_user.created_at,
-        pic_url=str(new_user.pic_url),
-    )
-
-    return r_user
+    return new_user
 
 
 # Sign In user
