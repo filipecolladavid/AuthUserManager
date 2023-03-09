@@ -19,5 +19,5 @@ async def get_all():
     return []
 
 @router.post('/', response_model=Item)
-async def create_item(user_id: str = Depends(oauth2.require_user), ):
+async def create_item(user_id: str = Depends(oauth2.require_creator),  ):
     user = await User.get(str(user_id))

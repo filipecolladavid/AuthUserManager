@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi_jwt_auth import AuthJWT
 from pydantic import BaseModel
 
-from .models.user import User
+from .models.user import Privileges, User
 
 from .config.settings import settings
 
@@ -35,6 +35,10 @@ class UserNotFound(Exception):
     pass
 
 
+class NotCreator(Exception):
+    pass
+
+
 class Unauthorized(Exception):
     pass
 
@@ -50,7 +54,7 @@ async def require_admin(Authorize: AuthJWT = Depends()):
 
         if not user:
             raise UserNotFound('User not found')
-        if user.privileges < 3:
+        if user.privileges < Privileges.ADMIN:
             raise Unauthorized('This action requires admin privileges')
         if not user.verified:
             raise NotVerified('You are not verified')
@@ -92,7 +96,7 @@ async def require_user(Authorize: AuthJWT = Depends()):
         user = await User.get(str(user_id))
 
         if not user:
-            raise UserNotFound('User no longer exist')
+            raise UserNotFound('User no longer exists')
 
         if not user.verified:
             raise NotVerified('You are not verified')
@@ -109,6 +113,50 @@ async def require_user(Authorize: AuthJWT = Depends()):
         if error == 'NotVerified':
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail='Please verify your account')
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail='Token is invalid or has expired')
+    return user_id
+
+
+async def require_creator(Authorize: AuthJWT = Depends()):
+    try:
+        Authorize.jwt_required()
+        user_id = Authorize.get_jwt_subject()
+
+        user = await User.get(str(user_id))
+
+        if not user:
+            raise UserNotFound('User no longer exists')
+
+        if not user.verified:
+            raise NotVerified('You are not verified')
+
+        if user.privileges < Privileges.CREATOR:
+            raise NotCreator('You need to be a creator to create a post')
+
+    except Exception as e:
+        error = e.__class__.__name__
+        print(e)
+        if error == 'MissingTokenError':
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='You are not logged in'
+            )
+        if error == 'UserNotFound':
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='User no longer exist'
+            )
+        if error == 'NotVerified':
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='Please verify your account'
+            )
+        if error == 'NotCreator':
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="You need to be a creator to create a post"
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail='Token is invalid or has expired')
     return user_id
