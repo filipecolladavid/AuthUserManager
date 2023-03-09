@@ -68,31 +68,6 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
     return deleted_user
 
 
-# # Update user
-# @router.put('/{username}', response_model=UserResponse)
-# async def update_user(username: str, user_id: str = Depends(oauth2.require_user)):
-#     # For update
-#     user = await User.find_one(User.username == username)
-
-#     # Requesting the change
-#     req_user = await User.get(str(user_id))
-
-#     if not user:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="User not found",
-#         )
-
-#     if req_user.privileges != "admin" and str(user.id) != str(user_id):
-#         raise HTTPException(
-#             status_code=status.HTTP_401_UNAUTHORIZED,
-#             detail="Need admin privilege to delete another user",
-#         )
-
-#     # Currently can't find a need for this endpoint, but it's here in case you change the users document model
-#     return user
-
-
 # Verify user - requires admin (3) privilege
 @router.patch('/{username}/verify', response_model=UserResponse)
 async def verify_user(username: str, user_id: str = Depends(oauth2.require_admin)):
@@ -164,6 +139,7 @@ async def change_user_privileges(username: str, privileges: str, user_id: str = 
     )
 
 
+# Changes user's profile picture - requires admin (3) privilege to change other user's profile pictures
 @router.put('/{username}/profile_pic', response_model=UserResponse)
 async def change_profile_picture(username: str, img: UploadFile, user_id: str = Depends(oauth2.require_user)):
     # To be changed
