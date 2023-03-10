@@ -15,30 +15,30 @@ from .. import oauth2
 router = APIRouter()
 
 
+# Returns posts filtered by who's making the request
 @router.get('/', response_model=List[Item])
 async def get_all(user_id: str = Depends(oauth2.require_id)):
     if not user_id:
         all_items_cursor = Item.find(Item.visibility <= Visibility.ALL)
 
-    user = await User.get(user_id)
-    print(user)
-    if user.privileges <= Privileges.CREATOR:
-        all_items_cursor = Item.find(Item.visibility <= Visibility.USERS)
-    if user.privileges >= Privileges.ADMIN:
-        all_items_cursor = Item.find(Item.visibility <= Visibility.ADMIN)
+    else:
+        user = await User.get(user_id)
+        if user.privileges <= Privileges.CREATOR:
+            all_items_cursor = Item.find(Item.visibility <= Visibility.USERS)
+        if user.privileges >= Privileges.ADMIN:
+            all_items_cursor = Item.find(Item.visibility <= Visibility.ADMIN)
 
     return await all_items_cursor.to_list(length=None)
 
 
-
+# Create an Item - requires creator privilege
 @router.post('/', response_model=Item)
 async def create_item(
-    img: UploadFile,
-    title: str,
-    desc: str,
-    visibility: str = "all",
-    user_id: str = Depends(oauth2.require_creator)
-):
+        img: UploadFile,
+        title: str,
+        desc: str,
+        visibility: str = "all",
+        user_id: str = Depends(oauth2.require_creator)):
     user = await User.get(str(user_id))
     if not user:
         raise HTTPException(
@@ -99,10 +99,14 @@ async def create_item(
     return item
 
 
+# # Update a post - require_user vs require_creator it's privileges might have changed
+# @router.put('/{item_id}', response_model=Item)
+# async def update_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
+#     user =
+
 # Delete a post - require_user vs require_creator it's privileges might have changed
 @router.delete('/{item_id}', response_model=Item)
 async def delete_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
-    item = Item.get(item_id)
     user = User.get(user_id)
 
     if user.username != item.author or user.privilege < Privileges.ADMIN:
@@ -110,8 +114,15 @@ async def delete_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Need admin privilege to delete another users post"
         )
-    deleted_item = item
+
+    item = Item.get(item_id)
+
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post does not exist anymore"
+        )
 
     await item.delete()
 
-    return deleted_item
+    return item
