@@ -98,6 +98,16 @@ async def change_user_privileges(username: str, privileges: str, user_id: str = 
 
     user = await User.find_one(User.username == username)
 
+    admins = User.find(User.privileges == 3)
+    admins = await admins.to_list(length=None)
+    print(len(admins))
+    if len(admins) == 1 and privileges.lower() != "admin": 
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Can't change admin status while being the only admin"
+        )
+    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -110,23 +120,23 @@ async def change_user_privileges(username: str, privileges: str, user_id: str = 
             detail="User not verified"
         )
 
-    privileges = ""
+    db_privileges = ""
 
-    if privileges.lower() == Privileges.ADMIN:
-        privileges = Privileges.ADMIN
-    elif privileges.lower() == Privileges.CREATOR:
-        privileges = Privileges.CREATOR
-    elif privileges.lower() == Privileges.PENDING:
-        privileges = Privileges.PENDING
-    elif privileges.lower() == Privileges.VISITOR:
-        privileges = Privileges.VISITOR
+    if privileges.lower() == "admin":
+        db_privileges = Privileges.ADMIN
+    elif privileges.lower() == "creator":
+        db_privileges = Privileges.CREATOR
+    elif privileges.lower() == "pending":
+        db_privileges = Privileges.PENDING
+    elif privileges.lower() == "visitor":
+        db_privileges = Privileges.VISITOR
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid privilege",
         )
 
-    user.privileges = privileges
+    user.privileges = db_privileges
 
     await user.save()
 
