@@ -67,7 +67,7 @@ async def require_admin(Authorize: AuthJWT = Depends()):
             )
         if error == 'UserNotFound':
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail='User no longer exist'
             )
         if error == 'Unauthorized':

@@ -46,7 +46,14 @@ async def get_user_info(username: str):
 
 
 # Delete user
-@router.delete('/{username}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    '/{username}',
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "User not found"}
+    }
+)
 async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)):
     # For deletion
     user = await User.find_one(User.username == username)
@@ -72,7 +79,15 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
 
 
 # Verify user - requires admin (3) privilege
-@router.patch('/{username}/verify', response_model=UserResponse)
+@router.patch(
+    '/{username}/verify',
+    response_model=UserResponse,
+    responses={
+        400: {"model": ErrorMessage, "description": "User already verified"},
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "User not found"}
+    }
+)
 async def verify_user(username: str, user_id: str = Depends(oauth2.require_admin)):
     user = await User.find_one(User.username == username)
     if not user:
@@ -95,7 +110,15 @@ async def verify_user(username: str, user_id: str = Depends(oauth2.require_admin
 
 
 # Change user's privilige - requires admin (3) privilege
-@router.patch('/{username}/privileges', response_model=UserResponse)
+@router.patch(
+    '/{username}/privileges',
+    response_model=UserResponse,
+    responses={
+        400: {"model": ErrorMessage, "description": "Invalid privilege request"},
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "User not found"}
+    }
+)
 async def change_user_privileges(username: str, privileges: str, user_id: str = Depends(oauth2.require_admin)):
 
     user = await User.find_one(User.username == username)
@@ -152,7 +175,14 @@ async def change_user_privileges(username: str, privileges: str, user_id: str = 
 
 
 # Changes user's profile picture - requires admin (3) privilege to change other user's profile pictures
-@router.put('/{username}/profile_pic', response_model=UserResponse)
+@router.put(
+    '/{username}/profile_pic',
+    response_model=UserResponse,
+    responses={
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "User not found"}
+    }
+)
 async def change_profile_picture(username: str, img: UploadFile, user_id: str = Depends(oauth2.require_user)):
     # To be changed
     user = await User.find_one(User.username == username)
