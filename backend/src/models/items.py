@@ -18,6 +18,8 @@ class Visibility:
 class UpdateItem(BaseModel):
     title: Optional[str]
     desc: Optional[str]
+    visibility: Optional[int]
+    pic_url: Optional[str]
 
 
 # This is the model that will be saved to the database

@@ -31,7 +31,6 @@ async def get_me(user_id: str = Depends(oauth2.require_user)):
 # Get user by username
 @router.get('/{username}', response_model=UserResponse)
 async def get_user_info(username: str, user_id: str = Depends(oauth2.require_admin)):
-    print(username)
     user = await User.find_one(User.username == username)
     if not user:
         raise HTTPException(
@@ -42,7 +41,7 @@ async def get_user_info(username: str, user_id: str = Depends(oauth2.require_adm
 
 
 # Delete user
-@router.delete('/{username}', response_model=UserResponse)
+@router.delete('/{username}', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)):
     # For deletion
     user = await User.find_one(User.username == username)
@@ -62,11 +61,9 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
             detail="Need admin privilege to delete another user",
         )
 
-    deleted_user = user
-
     await user.delete()
 
-    return deleted_user
+    return status.HTTP_204_NO_CONTENT
 
 
 # Verify user - requires admin (3) privilege

@@ -1,7 +1,7 @@
 from datetime import datetime
 import os
-from typing import List
-from fastapi import APIRouter, Depends, UploadFile, status, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status, HTTPException
 from urllib import parse
 from minio import InvalidResponseError
 
@@ -35,9 +35,9 @@ async def get_all(user_id: str = Depends(oauth2.require_id)):
 @router.post('/', response_model=Item)
 async def create_item(
         img: UploadFile,
-        title: str,
-        desc: str,
-        visibility: str = "all",
+        title: str = Form(...),
+        desc: str = Form(...),
+        visibility: str = Form("all"),
         user_id: str = Depends(oauth2.require_creator)):
     user = await User.get(str(user_id))
     if not user:
@@ -96,16 +96,26 @@ async def create_item(
 
     item.pic_url = publicUrl
     await item.save()
+
     return item
 
 
-# # Update a post - require_user vs require_creator it's privileges might have changed
-# @router.put('/{item_id}', response_model=Item)
-# async def update_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
-#     user =
+# Update a post - require_user vs require_creator it's privileges might have changed
+@router.put('/{item_id}', response_model=Item)
+async def update_item(
+    item_id: str,
+    img: Optional[UploadFile] = None,
+    update_data: UpdateItem = Depends(),
+    user_id: str = Depends(oauth2.require_user)
+):
+
+    item_update_data = update_data.dict()
+    print(item_update_data)
+    return status.HTTP_200_OK
+
 
 # Delete a post - require_user vs require_creator it's privileges might have changed
-@router.delete('/{item_id}', response_model=Item)
+@router.delete('/{item_id}', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
     user = User.get(user_id)
 
@@ -125,4 +135,4 @@ async def delete_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
 
     await item.delete()
 
-    return item
+    return status.HTTP_204_NO_CONTENT
