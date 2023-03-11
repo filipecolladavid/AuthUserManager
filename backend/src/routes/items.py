@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile, status, HTTPExce
 
 from src.config.settings import Allowed_types
 from src.models.user import Privileges, User
-from src.utils import add_minio
+from src.utils import add_minio, SuccessMessage, ErrorMessage
 
 from ..models.items import Item, Visibility
 from .. import oauth2
@@ -30,7 +30,15 @@ async def get_all(user_id: str = Depends(oauth2.require_id)):
 
 
 # Create an Item - requires creator privilege
-@router.post('/', response_model=Item)
+@router.post(
+    '/',
+    response_model=Item,
+    responses={
+        400: {"model": ErrorMessage, "description": "Invalid parameter"},
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "User not found"}
+    }
+)
 async def create_item(
         img: UploadFile,
         title: str = Form(...),
@@ -81,7 +89,14 @@ async def create_item(
 
 
 # Update a post - require_user vs require_creator => it's privileges might have changed
-@router.put('/{item_id}', response_model=Item)
+@router.put(
+    '/{item_id}',
+    response_model=Item,
+    responses={
+        400: {"model": ErrorMessage, "description": "Invalid parameter"},
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "User not found"}
+    })
 async def update_item(
         item_id: str,
         img: Optional[UploadFile] = None,
@@ -136,7 +151,15 @@ async def update_item(
 
 
 # Delete a post - require_user vs require_creator it's privileges might have changed
-@router.delete('/{item_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    '/{item_id}',
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "Post not found"},
+        204: {"description": "Deleted with success"}
+    }
+)
 async def delete_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
     user = User.get(user_id)
 

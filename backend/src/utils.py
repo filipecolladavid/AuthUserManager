@@ -13,6 +13,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class ErrorMessage(BaseModel):
     detail: str
 
+class SuccessMessage(BaseModel):
+    status: str
+
 
 def hash_password(password: str):
     return pwd_context.hash(password)

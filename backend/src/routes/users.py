@@ -2,7 +2,7 @@ import os
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, status, HTTPException
 
-from src.utils import ErrorMessage, add_minio
+from src.utils import SuccessMessage, ErrorMessage, add_minio
 
 from ..models.user import User, UserResponse, Privileges
 from .. import oauth2
@@ -33,7 +33,11 @@ async def get_me(user_id: str = Depends(oauth2.require_user)):
 
 
 # Get user by username
-@router.get('/{username}', response_model=UserResponse, responses={404: {"model": ErrorMessage, "description": "User not found"}})
+@router.get(
+    '/{username}',
+    response_model=UserResponse,
+    responses={404: {"model": ErrorMessage, "description": "User not found"}}
+)
 async def get_user_info(username: str):
     user = await User.find_one(User.username == username)
     if not user:
@@ -47,10 +51,10 @@ async def get_user_info(username: str):
 # Delete user
 @router.delete(
     '/{username}',
-    status_code=status.HTTP_204_NO_CONTENT,
     responses={
         401: {"model": ErrorMessage, "description": "Unauthorized"},
-        404: {"model": ErrorMessage, "description": "User not found"}
+        404: {"model": ErrorMessage, "description": "User not found"},
+        204: {"description": "Deleted with success"}
     }
 )
 async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)):
