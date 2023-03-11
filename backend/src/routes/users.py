@@ -1,7 +1,6 @@
 import os
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, status, HTTPException
-from pydantic import BaseModel
 
 from src.utils import ErrorMessage, add_minio
 

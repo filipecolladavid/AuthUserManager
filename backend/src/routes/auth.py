@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
-from bson.objectid import ObjectId
 from fastapi import APIRouter, Response, status, Depends, HTTPException
 
 from src import oauth2
 from ..models.user import User, Login, Register, UserResponse, Privileges
 from .. import utils
+from src.utils import ErrorMessage
 from src.oauth2 import AuthJWT
 from ..config.settings import settings
 
@@ -15,7 +15,14 @@ REFRESH_TOKEN_EXPIRES_IN = settings.REFRESH_TOKEN_EXPIRES_IN
 
 
 # Register new User - First user get's admin status
-@router.post('/register', status_code=status.HTTP_201_CREATED, response_model=UserResponse)
+@router.post(
+    '/register',
+    status_code=status.HTTP_201_CREATED,
+    response_model=UserResponse,
+    responses={
+        409: {"model": utils.ErrorMessage, "description": "Email or username already taken"}
+    }
+)
 async def create_user(credentials: Register):
 
     new_user = ""
@@ -55,7 +62,21 @@ async def create_user(credentials: Register):
 
 
 # Sign In user
-@router.post('/login')
+@router.post(
+    '/login',
+    responses={
+        403: {"model": ErrorMessage, "description": "Wrong credentials"},
+        404: {"model": ErrorMessage, "description": "User was not found"},
+        200: {
+            "description": "Sign in successfully",
+            "content": {
+                "application/json": {
+                    "example": {"status": "success", "access_token": "access_token"}
+                }
+            },
+        },
+    },
+)
 async def login(credentials: Login, response: Response, Authorize: AuthJWT = Depends()):
     user = await User.find_one(User.username == credentials.username)
 
@@ -67,7 +88,7 @@ async def login(credentials: Login, response: Response, Authorize: AuthJWT = Dep
 
     if not utils.verify_password(credentials.password, user.password):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail='Incorrect username or password'
         )
 
@@ -96,7 +117,22 @@ async def login(credentials: Login, response: Response, Authorize: AuthJWT = Dep
 
 
 # Refresh Acess Token
-@router.get('/refresh')
+@router.get(
+    '/refresh',
+    responses={
+        400: {"model": ErrorMessage, "description": "Invalid access Token"},
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "User was not found"},
+        200: {
+            "description": "Access token refreshed",
+            "content": {
+                "application/json": {
+                    "example": {"access_token": "access_token"}
+                }
+            },
+        },
+    },
+)
 async def refresh_token(response: Response, Authorize: AuthJWT = Depends()):
     try:
         Authorize.jwt_refresh_token_required()
@@ -113,7 +149,7 @@ async def refresh_token(response: Response, Authorize: AuthJWT = Depends()):
 
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail='The user belonging to this token no logger exist'
             )
         access_token = Authorize.create_access_token(
@@ -141,7 +177,21 @@ async def refresh_token(response: Response, Authorize: AuthJWT = Depends()):
 
 
 # Logout user
-@router.get('/logout', status_code=status.HTTP_200_OK)
+@router.get(
+    '/logout',
+    responses={
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "User not found"},
+        200: {
+            "description": "Access token refreshed",
+            "content": {
+                "application/json": {
+                    "example": {"status": "success"}
+                }
+            },
+        },
+    }
+)
 def logout(response: Response, Authorize: AuthJWT = Depends(), user_id: str = Depends(oauth2.require_user)):
     Authorize.unset_jwt_cookies()
     response.set_cookie('logged_in', '', -1)
