@@ -4,11 +4,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status, HTTPException
 
 from src.config.settings import Allowed_types
-from src.config.storage import minio_client, bucket
 from src.models.user import Privileges, User
 from src.utils import add_minio
 
-from ..models.items import Item, UpdateItem, Visibility
+from ..models.items import Item, Visibility
 from .. import oauth2
 
 router = APIRouter()

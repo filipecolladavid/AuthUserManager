@@ -1,5 +1,4 @@
 from datetime import datetime
-from pydantic import BaseModel
 from typing import Optional
 from beanie import Document
 
@@ -12,14 +11,6 @@ class Visibility:
     ALL = 0
     USERS = 1
     ADMIN = 2
-
-
-# For this template I'll be using images as the item
-class UpdateItem(BaseModel):
-    title: Optional[str]
-    desc: Optional[str]
-    visibility: Optional[int]
-    pic_url: Optional[str]
 
 
 # This is the model that will be saved to the database

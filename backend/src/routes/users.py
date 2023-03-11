@@ -6,6 +6,7 @@ from minio import InvalidResponseError
 
 from src.config.settings import Allowed_types, MinioBaseUrl
 from src.config.storage import minio_client, bucket
+from src.utils import add_minio
 
 from ..models.user import User, UserResponse, Privileges
 from .. import oauth2
@@ -168,29 +169,8 @@ async def change_profile_picture(username: str, img: UploadFile, user_id: str = 
             detail="Need admin privilege to change another's user profile picture",
         )
 
-    if img.content_type not in Allowed_types:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid type of file"
-        )
+    user.pic_url = add_minio(img=img,user=user,item=None)
 
-    file_size = os.fstat(img.file.fileno()).st_size
-    file_name = username+"_thumbnail."+img.content_type.split("/")[1]
-    try:
-        minio_client.put_object(
-            bucket,
-            file_name,
-            img.file,
-            file_size,
-            img.content_type)
-        publicUrl = MinioBaseUrl+bucket+"/"+parse.quote(file_name)
-    except InvalidResponseError as err:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=err.message
-        )
-
-    user.pic_url = publicUrl
     await user.save()
 
     return user
