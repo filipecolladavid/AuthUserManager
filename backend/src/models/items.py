@@ -29,4 +29,5 @@ class Item(Document):
     visibility: int
     author: str  # refers to author username (they're unique)
     pic_url: Optional[str] = None
+    edited: Optional[datetime] = None
     created_at: datetime

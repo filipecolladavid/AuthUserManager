@@ -2,12 +2,11 @@ from datetime import datetime
 import os
 from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status, HTTPException
-from urllib import parse
-from minio import InvalidResponseError
 
-from src.config.settings import Allowed_types, MinioBaseUrl
+from src.config.settings import Allowed_types
 from src.config.storage import minio_client, bucket
 from src.models.user import Privileges, User
+from src.utils import add_minio
 
 from ..models.items import Item, UpdateItem, Visibility
 from .. import oauth2
@@ -45,7 +44,7 @@ async def create_item(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    v = 0
+    v = None
     if visibility == "all":
         v = Visibility.ALL
     elif visibility == "users":
@@ -75,43 +74,66 @@ async def create_item(
 
     await item.create()
 
-    file_size = os.fstat(img.file.fileno()).st_size
-    file_name = str(user.id)+"_"+str(item.id)+"." + \
-        img.content_type.split("/")[1]
+    item.pic_url = add_minio(img, user, item)
 
-    try:
-        minio_client.put_object(
-            bucket,
-            file_name,
-            img.file,
-            file_size,
-            img.content_type
-        )
-        publicUrl = MinioBaseUrl+bucket+"/"+parse.quote(file_name)
-    except InvalidResponseError as err:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=err.message
-        )
-
-    item.pic_url = publicUrl
     await item.save()
 
     return item
 
 
-# Update a post - require_user vs require_creator it's privileges might have changed
+# Update a post - require_user vs require_creator => it's privileges might have changed
 @router.put('/{item_id}', response_model=Item)
 async def update_item(
-    item_id: str,
-    img: Optional[UploadFile] = None,
-    update_data: UpdateItem = Depends(),
-    user_id: str = Depends(oauth2.require_user)
+        item_id: str,
+        img: Optional[UploadFile] = None,
+        title: str = Form(...),
+        desc: str = Form(...),
+        visibility: str = Form(...),
+        user_id: str = Depends(oauth2.require_user)
 ):
+    user = await User.get(user_id)
+    item = await Item.get(item_id)
 
-    item_update_data = update_data.dict()
-    print(item_update_data)
-    return status.HTTP_200_OK
+    if user.privileges < Privileges.ADMIN and user.username != item.author:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You can't change another users post"
+        )
+
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post does not exist anymore"
+        )
+
+    pic_url = item.pic_url
+
+    if img:
+        pic_url = add_minio(img=img, user=user, item=item)
+    v = None
+    if visibility == "all":
+        v = Visibility.ALL
+    elif visibility == "users":
+        v = Visibility.USERS
+    elif visibility == "admin":
+        v = Visibility.ADMIN
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Visibility not valid"
+        )
+
+    item = Item(
+        title=title,
+        desc=desc,
+        visibility=v,
+        author=user.username,
+        pic_url=pic_url,
+        edited=datetime.utcnow(),
+        created_at=item.created_at,
+    )
+
+    return await item.save()
 
 
 # Delete a post - require_user vs require_creator it's privileges might have changed

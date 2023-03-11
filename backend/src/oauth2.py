@@ -169,6 +169,7 @@ async def require_id(Authorize: AuthJWT = Depends()):
 
         user = await User.get(str(user_id))
 
+    # For filtering posts can't raise HTTP exception if user doens't exist
     except Exception as e:
         return None
     
