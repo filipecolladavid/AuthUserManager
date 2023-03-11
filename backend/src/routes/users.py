@@ -1,12 +1,9 @@
 import os
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, status, HTTPException
-from urllib import parse
-from minio import InvalidResponseError
+from pydantic import BaseModel
 
-from src.config.settings import Allowed_types, MinioBaseUrl
-from src.config.storage import minio_client, bucket
-from src.utils import add_minio
+from src.utils import ErrorMessage, add_minio
 
 from ..models.user import User, UserResponse, Privileges
 from .. import oauth2
@@ -16,7 +13,7 @@ router = APIRouter()
 
 # Get all users
 @router.get('/', response_model=List[UserResponse])
-async def get_all(user_id: str = Depends(oauth2.require_admin)):
+async def get_all():
     # Find all documents in the collection
     all_users_cursor = User.find({})
 
@@ -24,14 +21,21 @@ async def get_all(user_id: str = Depends(oauth2.require_admin)):
 
 
 # Get current logged in user
-@router.get('/me', response_model=UserResponse)
+@router.get(
+    '/me',
+    response_model=UserResponse,
+    responses={
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "User not found"}
+    }
+)
 async def get_me(user_id: str = Depends(oauth2.require_user)):
     return await User.get(str(user_id))
 
 
 # Get user by username
-@router.get('/{username}', response_model=UserResponse)
-async def get_user_info(username: str, user_id: str = Depends(oauth2.require_admin)):
+@router.get('/{username}', response_model=UserResponse, responses={404: {"model": ErrorMessage, "description": "User not found"}})
+async def get_user_info(username: str):
     user = await User.find_one(User.username == username)
     if not user:
         raise HTTPException(
@@ -99,12 +103,11 @@ async def change_user_privileges(username: str, privileges: str, user_id: str = 
     admins = User.find(User.privileges == 3)
     admins = await admins.to_list(length=None)
     print(len(admins))
-    if len(admins) == 1 and privileges.lower() != "admin": 
+    if len(admins) == 1 and privileges.lower() != "admin":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Can't change admin status while being the only admin"
         )
-    
 
     if not user:
         raise HTTPException(
@@ -169,7 +172,7 @@ async def change_profile_picture(username: str, img: UploadFile, user_id: str = 
             detail="Need admin privilege to change another's user profile picture",
         )
 
-    user.pic_url = add_minio(img=img,user=user,item=None)
+    user.pic_url = add_minio(img=img, user=user, item=None)
 
     await user.save()
 

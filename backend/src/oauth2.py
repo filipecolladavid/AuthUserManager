@@ -50,8 +50,6 @@ async def require_admin(Authorize: AuthJWT = Depends()):
 
         user = await User.get(str(user_id))
 
-        print(user)
-
         if not user:
             raise UserNotFound('User not found')
         if user.privileges < Privileges.ADMIN:
@@ -109,7 +107,7 @@ async def require_user(Authorize: AuthJWT = Depends()):
                 status_code=status.HTTP_401_UNAUTHORIZED, detail='You are not logged in')
         if error == 'UserNotFound':
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail='User no longer exist')
+                status_code=status.HTTP_404_NOT_FOUND, detail='User no longer exist')
         if error == 'NotVerified':
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail='Please verify your account')

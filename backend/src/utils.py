@@ -3,11 +3,15 @@ import os
 from fastapi import status, HTTPException
 from urllib import parse
 from minio import InvalidResponseError
+from pydantic import BaseModel
 
 from src.config.settings import Allowed_types, MinioBaseUrl
 from src.config.storage import minio_client, bucket
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+class ErrorMessage(BaseModel):
+    detail: str
 
 
 def hash_password(password: str):
