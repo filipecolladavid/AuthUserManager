@@ -1,10 +1,9 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Response, status, Depends, HTTPException
+from fastapi import APIRouter, Form, Response, status, Depends, HTTPException
 
 from src import oauth2
-from ..models.user import User, Login, Register, UserResponse, Privileges
-from .. import utils
-from src.utils import ErrorMessage
+from ..models.user import User, UserResponse, Privileges
+from src.utils import ErrorMessage, hash_password, verify_password
 from src.oauth2 import AuthJWT
 from ..config.settings import settings
 
@@ -20,10 +19,14 @@ REFRESH_TOKEN_EXPIRES_IN = settings.REFRESH_TOKEN_EXPIRES_IN
     status_code=status.HTTP_201_CREATED,
     response_model=UserResponse,
     responses={
-        409: {"model": utils.ErrorMessage, "description": "Email or username already taken"}
+        409: {"model": ErrorMessage, "description": "Email or username already taken"}
     }
 )
-async def create_user(credentials: Register):
+async def create_user(
+        email: str = Form(...),
+        username: str = Form(...),
+        password: str = Form(...)
+):
 
     new_user = ""
 
@@ -31,17 +34,17 @@ async def create_user(credentials: Register):
     print(size)
     if (size == 0):
         new_user = User(
-            username=credentials.username,
-            email=credentials.email.lower(),
-            password=utils.hash_password(credentials.password),
+            username=username,
+            email=email.lower(),
+            password=hash_password(password),
             verified=True,
             privileges=Privileges.ADMIN,
             created_at=datetime.utcnow()
         )
 
     else:
-        user_exists = await User.find_one(User.username == credentials.username)
-        email_exists = await User.find_one(User.email == credentials.email)
+        user_exists = await User.find_one(User.username == username)
+        email_exists = await User.find_one(User.email == email)
         if user_exists or email_exists:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -49,9 +52,9 @@ async def create_user(credentials: Register):
             )
 
         new_user = User(
-            username=credentials.username,
-            email=credentials.email.lower(),
-            password=utils.hash_password(credentials.password),
+            username=username,
+            email=email.lower(),
+            password=hash_password(password),
             verified=False,
             privileges=Privileges.PENDING,
             created_at=datetime.utcnow()
@@ -64,6 +67,7 @@ async def create_user(credentials: Register):
 # Sign In user
 @router.post(
     '/login',
+    status_code=status.HTTP_200_OK,
     responses={
         403: {"model": ErrorMessage, "description": "Wrong credentials"},
         404: {"model": ErrorMessage, "description": "User was not found"},
@@ -77,8 +81,8 @@ async def create_user(credentials: Register):
         },
     },
 )
-async def login(credentials: Login, response: Response, Authorize: AuthJWT = Depends()):
-    user = await User.find_one(User.username == credentials.username)
+async def login(response: Response, username: str = Form(...), password: str = Form(...), Authorize: AuthJWT = Depends()):
+    user = await User.find_one(User.username == username)
 
     if not user:
         raise HTTPException(
@@ -86,7 +90,7 @@ async def login(credentials: Login, response: Response, Authorize: AuthJWT = Dep
             detail='User not found'
         )
 
-    if not utils.verify_password(credentials.password, user.password):
+    if not verify_password(password, user.password):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Incorrect username or password'
