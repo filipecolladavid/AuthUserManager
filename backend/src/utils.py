@@ -1,5 +1,5 @@
-from passlib.context import CryptContext
 import os
+from passlib.context import CryptContext
 from fastapi import status, HTTPException
 from urllib import parse
 from minio import InvalidResponseError
@@ -10,8 +10,10 @@ from src.config.storage import minio_client, bucket
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 class ErrorMessage(BaseModel):
     detail: str
+
 
 class SuccessMessage(BaseModel):
     status: str
@@ -24,6 +26,7 @@ def hash_password(password: str):
 def verify_password(password: str, hashed_password: str):
     return pwd_context.verify(password, hashed_password)
 
+
 # Add img to minio
 def add_minio(img, user, item):
     if img.content_type not in Allowed_types:
@@ -31,7 +34,7 @@ def add_minio(img, user, item):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid type of file"
         )
-    
+
     file_size = os.fstat(img.file.fileno()).st_size
     if item:
         file_name = str(user.id)+"_"+str(item.id)+"." + \
@@ -55,9 +58,4 @@ def add_minio(img, user, item):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=err.message
         )
-# def is_valid_email(email: str) -> bool:
-#     pat = "^[A-Z0-9_!#$%&'*+/=?`{|}~^-]+(?:\.[A-Z0-9_!#$%&'*+/=?`{|}~^-]+)*@[A-Z0-9-]+(?:\.[A-Z0-9-]+)*$"
-#     print(re.match(pat,email))
-#     if re.match(pat, email):
-#         return True
-#     return False
+

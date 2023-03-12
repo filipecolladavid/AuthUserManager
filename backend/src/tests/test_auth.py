@@ -1,83 +1,91 @@
-from httpx import AsyncClient
+from datetime import datetime
 import pytest
+from httpx import AsyncClient
+from src.config.database import startDB
+
+from src.config.settings import settings
+
 from ..main import app
 from ..models.user import User, Privileges
-from fastapi.testclient import TestClient
+from motor.motor_asyncio import AsyncIOMotorClient
 
-base_url = "http://localhost:8000/api/auth"
 
-pytest_plugins = ('pytest_asyncio',)
-"""
+@pytest.fixture(scope='module')
+async def test_db():
+    await startDB()
+    yield
+    # clean up database after test
+    client = AsyncIOMotorClient(settings.DATABASE_URL)
+    await client.drop_database(client.db_name)
 
-@pytest.mark.asyncio
-async def test_create_user():
-    async with AsyncClient(app=app, base_url=base_url) as client:
-        # create a new admin user
-        response = await client.post(
-            "/register",
-            data={
-                "username": "adminuser",
-                "email": "adminuser@example.com",
-                "password": "adminpassword"
-            }
-        )
-        assert response.status_code == 201
-        assert response.json() == {
-            "id": response.json()["id"],
-            "username": "adminuser",
-            "email": "adminuser@example.com",
-            "verified": True,
-            "privileges": "admin"
+
+@pytest.mark.anyio
+async def test_create_first_user_as_admin(test_db, client: AsyncClient):
+    response = await client.post(
+        "auth/register",
+        data={
+            "email": "admin@example.com",
+            "username": "admin",
+            "password": "adminpassword"
         }
+    )
+    assert response.status_code == 201
+    assert response.json()["username"] == "admin"
+    assert response.json()["email"] == "admin@example.com"
+    assert response.json()["verified"] == True
+    assert response.json()["privileges"] == Privileges.ADMIN
 
-        # check that the user was created in the database
-        user = await User.find_one(User.username == "adminuser")
-        assert user is not None
-        assert user.email == "adminuser@example.com"
-        assert user.password is not None
-        assert user.privileges == Privileges.ADMIN
 
-        # create a second user with the same email (should return 409 conflict)
-        response = await client.post(
-            "/register",
-            data={
-                "username": "testuser",
-                "email": "adminuser@example.com",
-                "password": "testpassword"
-            }
-        )
-        assert response.status_code == 409
-        assert response.json() == {
-            "detail": "Email or username already taken"
+@pytest.mark.anyio
+async def test_create_user_with_existing_email(test_db, client: AsyncClient):
+
+    # Create a user with a username
+    user = User(
+        username="testuser",
+        email="test@example.com",
+        password="testpassword",
+        verified=False,
+        privileges=Privileges.PENDING,
+        created_at=datetime.utcnow()
+    )
+
+    await user.create()
+
+    response = await client.post(
+        "auth/register",
+        data={
+            "email": "test@example.com",
+            "username": "testuser2",
+            "password": "testpassword"
         }
+    )
 
-        # create a second user with a different email
-        response = await client.post(
-            "/register",
-            data={
-                "username": "testuser",
-                "email": "testuser@example.com",
-                "password": "testpassword"
-            }
-        )
-        assert response.status_code == 201
-        assert response.json() == {
-            "id": response.json()["id"],
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Email or username already taken"
+
+
+@pytest.mark.anyio
+async def test_create_user_with_existing_username(test_db, client: AsyncClient):
+    # Create a user with a username
+    user = User(
+        username="testuser",
+        email="test@example.com",
+        password="testpassword",
+        verified=True,
+        privileges=Privileges.VISITOR,
+        created_at=datetime.utcnow()
+    )
+
+    await user.create()
+
+    response = await client.post(
+        "auth/register",
+        data={
+            "email": "testuser2@example.com",
             "username": "testuser",
-            "email": "testuser@example.com",
-            "verified": False,
-            "privileges": "pending"
+            "password": "testpassword"
         }
+    )
 
-        # check that the second user was created in the database
-        user = await User.find_one(User.username == "testuser")
-        assert user is not None
-        assert user.email == "testuser@example.com"
-        assert user.password is not None
-        assert user.privileges == Privileges.PENDING
-
-"""
-
-# def test_read_items():
-#     with TestClient(app) as client:
-#         response = client.get(base_url+"/register")
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Email or username already taken"

@@ -48,7 +48,7 @@ async def create_user(
         if user_exists or email_exists:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail='Account already exists'
+                detail='Email or username already taken'
             )
 
         new_user = User(
@@ -97,7 +97,6 @@ async def login(response: Response, username: str = Form(...), password: str = F
         )
 
     # Create access token
-
     access_token = Authorize.create_access_token(
         subject=str(user.id),
         expires_time=timedelta(minutes=ACCESS_TOKEN_EXPIRES_IN)
