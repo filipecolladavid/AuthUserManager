@@ -114,7 +114,7 @@ async def verify_user(username: str, user_id: str = Depends(oauth2.require_admin
 
 # Change user's privilige - requires admin (3) privilege
 @router.patch(
-    '/{username}/privileges',
+    '/{username}/privileges/{privileges}',
     response_model=UserResponse,
     responses={
         400: {"model": ErrorMessage, "description": "Invalid privilege request"},
@@ -124,12 +124,16 @@ async def verify_user(username: str, user_id: str = Depends(oauth2.require_admin
 )
 async def change_user_privileges(username: str, privileges: str, user_id: str = Depends(oauth2.require_admin)):
 
+    # User to change
     user = await User.find_one(User.username == username)
+
+    # User requesting the change
+    userR = await User.get(str(user_id))
 
     admins = User.find(User.privileges == 3)
     admins = await admins.to_list(length=None)
-    print(len(admins))
-    if len(admins) == 1 and privileges.lower() != "admin":
+
+    if user.username == userR.username and len(admins) == 1 and privileges.lower() != "admin":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Can't change admin status while being the only admin"
