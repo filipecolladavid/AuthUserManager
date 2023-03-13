@@ -110,6 +110,37 @@ async def require_user(Authorize: AuthJWT = Depends()):
     return user_id
 
 
+async def require_verified_user(Authorize: AuthJWT = Depends()):
+    try:
+        Authorize.jwt_required()
+        user_id = Authorize.get_jwt_subject()
+
+        user = await User.get(str(user_id))
+
+        if not user:
+            raise UserNotFound('User no longer exists')
+        if not user.verified:
+            raise NotVerified("You're not verified")
+
+    except Exception as e:
+        error = e.__class__.__name__
+        print(e)
+        if error == 'MissingTokenError':
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail='You are not logged in')
+        if error == 'UserNotFound':
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail='User no longer exist')
+        if error == 'NotVerified':
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="You're not verified"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail='Token is invalid or has expired')
+    return user_id
+
+
 async def require_creator(Authorize: AuthJWT = Depends()):
     try:
         Authorize.jwt_required()
@@ -164,5 +195,5 @@ async def require_id(Authorize: AuthJWT = Depends()):
     # For filtering posts can't raise HTTP exception if user doens't exist
     except Exception as e:
         return None
-    
+
     return user_id
