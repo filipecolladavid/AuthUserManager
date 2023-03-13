@@ -7,8 +7,14 @@ from pydantic import BaseModel
 
 from src.config.settings import Allowed_types, MinioBaseUrl
 from src.config.storage import minio_client, bucket
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt", "sha256_crypt"], 
+    sha256_crypt__rounds=5000, 
+    deprecated="auto"
+)
 
 
 class ErrorMessage(BaseModel):
@@ -58,4 +64,3 @@ def add_minio(img, user, item):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=err.message
         )
-

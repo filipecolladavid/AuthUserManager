@@ -31,7 +31,7 @@ async def create_user(
     new_user = ""
 
     size = await User.count()
-    print(size)
+
     if (size == 0):
         new_user = User(
             username=username,
@@ -89,7 +89,7 @@ async def login(response: Response, username: str = Form(...), password: str = F
             status_code=status.HTTP_404_NOT_FOUND,
             detail='User not found'
         )
-
+    
     if not verify_password(password, user.password):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
