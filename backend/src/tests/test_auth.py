@@ -1,5 +1,4 @@
-from datetime import datetime, timedelta
-from fastapi import Depends
+from datetime import datetime
 import pytest
 from httpx import AsyncClient
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -7,17 +6,16 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from src.config.database import startDB
 from src.config.settings import settings
 from src.utils import hash_password, verify_password
-from fastapi_jwt_auth import AuthJWT
-from ..oauth2 import require_user
 from ..models.user import User, Privileges
 
 
 @pytest.fixture(scope='module')
 async def test_db():
     await startDB()
-    yield
-    # clean up database after test
     client = AsyncIOMotorClient(settings.DATABASE_URL)
+    yield client
+    
+    # clean up database after test
     await client.drop_database(client.db_name)
 
 
@@ -209,4 +207,3 @@ async def test_login_with_non_user(test_db, client: AsyncClient):
 
     # Assert that the response has a detail field indicating user not found
     assert response.json()["detail"] == "User not found"
-

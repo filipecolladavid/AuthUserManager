@@ -1,8 +1,7 @@
-import os
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, status, HTTPException
 
-from src.utils import SuccessMessage, ErrorMessage, add_minio
+from src.utils import ErrorMessage, add_minio
 
 from ..models.user import User, UserResponse, Privileges
 from .. import oauth2
@@ -55,7 +54,8 @@ async def get_user_info(username: str):
         401: {"model": ErrorMessage, "description": "Unauthorized"},
         404: {"model": ErrorMessage, "description": "User not found"},
         204: {"description": "Deleted with success"}
-    }
+    },
+    status_code=204
 )
 async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)):
     # For deletion
@@ -78,7 +78,7 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
 
     await user.delete()
 
-    return status.HTTP_204_NO_CONTENT
+    return {}
 
 
 # Verify user - requires admin (3) privilege
@@ -186,8 +186,8 @@ async def change_user_privileges(username: str, privileges: str, user_id: str = 
         404: {"model": ErrorMessage, "description": "User not found"}
     }
 )
-async def change_profile_picture(username: str, img: UploadFile, user_id: str = Depends(oauth2.require_user)):
-    # To be changed
+async def change_profile_picture(username: str, img: UploadFile, user_id: str = Depends(oauth2.require_verified_user)):
+    # User's picture to change
     user = await User.find_one(User.username == username)
 
     # Requesting the change
