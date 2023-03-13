@@ -126,6 +126,11 @@ async def change_user_privileges(username: str, privileges: str, user_id: str = 
 
     # User to change
     user = await User.find_one(User.username == username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User does not exist',
+        )
 
     # User requesting the change
     userR = await User.get(str(user_id))
@@ -137,12 +142,6 @@ async def change_user_privileges(username: str, privileges: str, user_id: str = 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Can't change admin status while being the only admin"
-        )
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='User does not exit',
         )
 
     if not user.verified:
