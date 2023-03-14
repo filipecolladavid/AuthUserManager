@@ -6,7 +6,9 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from src.config.database import startDB
 from src.config.settings import settings
 from src.utils import hash_password, verify_password
-from ..models.user import User, Privileges
+from ..models.user import User
+from ..config.settings import MinioBaseUrl
+from ..config.storage import bucket, minio_client
 
 
 def users():
@@ -34,7 +36,6 @@ async def test_db():
     await client.drop_database(client.db_name)
 
 
-# TODO - test diferent filtering options
 # Get users
 @pytest.mark.anyio
 async def test_get_all_users(test_db, client: AsyncClient):
@@ -530,3 +531,212 @@ async def test_unauthorized_privilege_change(test_db, client: AsyncClient):
     assert user_list[1].privileges == user.privileges
 
     await User.delete_all()
+
+
+# TODO - remove images from minio after tests
+
+# Profile picture change
+@pytest.mark.anyio
+async def test_user_change_profile_pic(test_db, client: AsyncClient):
+    list_users = users()
+    await list_users[1].create()
+
+    response = await client.post(
+        "/auth/login",
+        data={
+            "username": list_users[1].username,
+            "password": "testpassword"
+        }
+    )
+    assert response.status_code == 200
+
+    # Test JPEG
+    file = "pizza-cat.jpeg"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/"+list_users[1].username+"/profile_pic", files=_files
+    )
+    print(response)
+    assert response.status_code == 200
+    assert response.json()["pic_url"] == MinioBaseUrl+bucket+"/"+str(
+        list_users[1].id)+"_thumbnail.jpeg"
+
+    # Test PNG
+    file = "pizza.png"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/"+list_users[1].username+"/profile_pic", files=_files
+    )
+    assert response.status_code == 200
+    assert response.json()["pic_url"] == MinioBaseUrl+bucket+"/"+str(
+        list_users[1].id)+"_thumbnail.png"
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
+
+    await User.delete_all()
+
+
+@pytest.mark.anyio
+async def test_admin_change_other_profile_pic(test_db, client: AsyncClient):
+    list_users = users()
+    await list_users[3].create()
+    await list_users[1].create()
+
+    response = await client.post(
+        "/auth/login",
+        data={
+            "username": list_users[3].username,
+            "password": "testpassword"
+        }
+    )
+    assert response.status_code == 200
+
+    # Test JPEG
+    file = "pizza-cat.jpeg"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/"+list_users[1].username+"/profile_pic", files=_files
+    )
+    print(response.json())
+    assert response.status_code == 200
+    assert response.json()["pic_url"] == MinioBaseUrl+bucket+"/"+str(
+        list_users[1].id)+"_thumbnail.jpeg"
+
+    # Test PNG
+    file = "pizza.png"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/"+list_users[1].username+"/profile_pic", files=_files
+    )
+    assert response.status_code == 200
+    assert response.json()["pic_url"] == MinioBaseUrl+bucket+"/"+str(
+        list_users[1].id)+"_thumbnail.png"
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
+
+    await User.delete_all()
+
+
+@pytest.mark.anyio
+async def test_incorrect_type_profile_pic(test_db, client: AsyncClient):
+    list_users = users()
+
+    await list_users[1].create()
+
+    response = await client.post(
+        "/auth/login",
+        data={
+            "username": list_users[1].username,
+            "password": "testpassword"
+        }
+    )
+    assert response.status_code == 200
+
+    # Test unsuported type
+    file = "conftest.py"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/"+list_users[1].username+"/profile_pic", files=_files
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid type of file"
+
+    await User.delete_all()
+
+
+@pytest.mark.anyio
+async def test_change_non_user_profile_pic(test_db, client: AsyncClient):
+    list_users = users()
+    await list_users[3].create()
+
+    response = await client.post(
+        "/auth/login",
+        data={
+            "username": list_users[3].username,
+            "password": "testpassword"
+        }
+    )
+    assert response.status_code == 200
+
+    file = "pizza-cat.jpeg"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/non_existing_username/profile_pic", files=_files
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"
+
+    await User.delete_all()
+
+
+@pytest.mark.anyio
+async def test_change_unverified_user(test_db, client: AsyncClient):
+    list_users = users()
+    await list_users[0].create()
+
+    response = await client.post(
+        "/auth/login",
+        data={
+            "username": list_users[0].username,
+            "password": "testpassword"
+        }
+    )
+    assert response.status_code == 200
+
+    file = "pizza-cat.jpeg"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/non_existing_username/profile_pic", files=_files
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "You're not verified"
+
+
+@pytest.mark.anyio
+async def test_non_admin_change_other_profile_pic(test_db, client: AsyncClient):
+    list_users = users()
+    await list_users[1].create()
+    await list_users[3].create()
+
+    response = await client.post(
+        "/auth/login",
+        data={
+            "username": list_users[1].username,
+            "password": "testpassword"
+        }
+    )
+    assert response.status_code == 200
+
+    file = "pizza-cat.jpeg"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/"+list_users[3].username+"/profile_pic", files=_files
+    )
+
+    assert response.status_code == 401
+    assert response.json()[
+        "detail"] == "Need admin privilege to change another's user profile picture"
+
+
+@pytest.mark.anyio
+async def test_clear_bucket(test_db, client: AsyncClient):
+    objects = minio_client.list_objects(bucket, recursive=True)
+    for obj in objects:
+        minio_client.remove_object(bucket, obj.object_name)
+
+    objects = minio_client.list_objects(bucket, recursive=True)
+
+    assert len([obj.object_name for obj in objects]) == 0

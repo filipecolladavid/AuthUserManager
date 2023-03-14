@@ -11,8 +11,8 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 pwd_context = CryptContext(
-    schemes=["bcrypt", "sha256_crypt"], 
-    sha256_crypt__rounds=5000, 
+    schemes=["bcrypt", "sha256_crypt"],
+    sha256_crypt__rounds=5000,
     deprecated="auto"
 )
 
@@ -46,7 +46,7 @@ def add_minio(img, user, item):
         file_name = str(user.id)+"_"+str(item.id)+"." + \
             img.content_type.split("/")[1]
     else:
-        file_name = file_name = str(
+        file_name = str(
             user.id)+"_thumbnail."+img.content_type.split("/")[1]
 
     try:

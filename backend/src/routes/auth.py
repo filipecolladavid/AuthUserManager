@@ -186,7 +186,7 @@ async def refresh_token(response: Response, Authorize: AuthJWT = Depends()):
         401: {"model": ErrorMessage, "description": "Unauthorized"},
         404: {"model": ErrorMessage, "description": "User not found"},
         200: {
-            "description": "Access token refreshed",
+            "description": "Logged out",
             "content": {
                 "application/json": {
                     "example": {"status": "success"}

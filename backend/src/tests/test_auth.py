@@ -207,3 +207,8 @@ async def test_login_with_non_user(test_db, client: AsyncClient):
 
     # Assert that the response has a detail field indicating user not found
     assert response.json()["detail"] == "User not found"
+
+
+# TODO
+# Logout
+# Refresh token

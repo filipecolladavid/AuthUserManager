@@ -21,12 +21,14 @@ async def get_all(user_id: str = Depends(oauth2.require_id)):
 
     else:
         user = await User.get(user_id)
-        if user.privileges <= Privileges.CREATOR:
+        if user.privileges <= Privileges.PENDING:
+            all_items_cursor = Item.find(Item.visibility <= Visibility.ALL)
+        if user.privileges >= Privileges.VISITOR:
             all_items_cursor = Item.find(Item.visibility <= Visibility.USERS)
         if user.privileges >= Privileges.ADMIN:
             all_items_cursor = Item.find(Item.visibility <= Visibility.ADMIN)
 
-    return await all_items_cursor.to_list(length=None)
+    return await all_items_cursor.to_list()
 
 
 # Create an Item - requires creator privilege
