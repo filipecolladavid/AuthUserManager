@@ -202,7 +202,7 @@ async def change_profile_picture(username: str, img: UploadFile, user_id: str = 
             detail="User not found",
         )
 
-    if req_user.privileges != "admin" and str(user.id) != str(user_id):
+    if req_user.privileges != Privileges.ADMIN and str(user.id) != str(user_id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Need admin privilege to change another's user profile picture",
