@@ -1,21 +1,10 @@
-# Template: FastAPI - ReactJS - MongoDB with JWT Authentication  
 
-Template for starting a project with FARM stack. Dockerized, ready for deployment
+# User Management and Image Upload API
 
-## Development
+This is starter project for a social media API developed with [FastAPI](https://fastapi.tiangolo.com/), [MongoDB](https://www.mongodb.com/) and [MinIO](https://min.io/). It provides functionalities such as user registration, user authentication and authorization, creating and updating posts, and changing user settings. The API also implements token-based authentication using OAuth2 for security. The API is developed using the RESTful architectural style and is designed to be scalable, performant, and easy to use. The project serves as a template for developers looking to create social media like applications using FastAPI and MongoDB.
 
-1. Go to the directory where the frontend folder is located and run
 
-```bash
-  npm install
-```
-2. Go back to the root of the project and start the container
 
-```bash
-  docker-compose up
-```
-
-Both the frontend and the backend have auto-reload enabled, open the project on your IDE of choice and start development.
 
 ## Environment Variables
 
@@ -43,9 +32,28 @@ JWT
 `JWT_PRIVATE_KEY` 
 
 `JWT_PUBLIC_KEY`
+## Usage
 
-CORS bypass for origin
+```bash
+  docker-compose up
+```
 
-`CLIENT_ORIGIN`
+And start development - backend has auto-reload enabled in the docker-container
+## Running Tests
 
-(See envExample)
+To run tests, the database must be empty. Go to the ```backend/src/tests``` directory and run the following command:
+
+```bash
+  pytest
+```
+or
+```bash
+  pytest -v 
+```
+for a more detailed view of each individual test
+
+## Roadmap
+
+- Add endpoints to retreive users it's own posts
+- Improve MinIO storage organization
+
