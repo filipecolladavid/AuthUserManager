@@ -1,7 +1,7 @@
 
 # User Management and Image Upload API
 
-This is starter project for a social media API developed with [FastAPI](https://fastapi.tiangolo.com/), [MongoDB](https://www.mongodb.com/) and [MinIO](https://min.io/). It provides functionalities such as user registration, user authentication and authorization, creating and updating posts, and changing user settings. The API also implements token-based authentication using OAuth2 for security. The API is developed using the RESTful architectural style and is designed to be scalable, performant, and easy to use. The project serves as a template for developers looking to create social media like applications using FastAPI and MongoDB.
+A starter project for a social media API developed with [FastAPI](https://fastapi.tiangolo.com/), [MongoDB](https://www.mongodb.com/) and [MinIO](https://min.io/). It provides functionalities such as user registration, user authentication and authorization, creating and updating posts, and changing user settings. The API also implements token-based authentication using OAuth2 for security. The API is developed using the RESTful architectural style and is designed to be scalable, performant, and easy to use. The project serves as a template for developers looking to create social media like applications using FastAPI and MongoDB.
 
 
 
