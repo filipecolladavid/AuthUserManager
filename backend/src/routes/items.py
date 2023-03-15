@@ -141,6 +141,7 @@ async def update_item(
     pic_url = item.pic_url
 
     item = Item(
+        id=item_id,
         title=title,
         desc=desc,
         visibility=v,
