@@ -125,10 +125,6 @@ async def update_item(
             detail="Post does not exist anymore"
         )
 
-    pic_url = item.pic_url
-
-    if img:
-        pic_url = add_minio(img=img, user=user, item=item)
     v = None
     if visibility == "all":
         v = Visibility.ALL
@@ -142,6 +138,8 @@ async def update_item(
             detail="Visibility not valid"
         )
 
+    pic_url = item.pic_url
+
     item = Item(
         title=title,
         desc=desc,
@@ -151,6 +149,12 @@ async def update_item(
         edited=datetime.utcnow(),
         created_at=item.created_at,
     )
+
+    await item.save()
+
+    if img:
+        pic_url = add_minio(img=img, user=user, item=item)
+        item.pic_url = pic_url
 
     return await item.save()
 
@@ -181,7 +185,7 @@ async def delete_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post does not exist anymore"
         )
-    
+
     pic_url = item.pic_url
     await item.delete()
     if pic_url:

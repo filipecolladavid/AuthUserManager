@@ -76,6 +76,7 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
             detail="Need admin privilege to delete another user",
         )
 
+    #TODO - delete all users files from minio and items
     pic_url = user.pic_url
     await user.delete()
     if pic_url:
