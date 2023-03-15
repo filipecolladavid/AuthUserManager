@@ -32,6 +32,8 @@ JWT
 `JWT_PRIVATE_KEY` 
 
 `JWT_PUBLIC_KEY`
+
+(see envExample)
 ## Usage
 
 ```bash
