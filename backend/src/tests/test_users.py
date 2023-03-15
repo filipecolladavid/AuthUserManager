@@ -5,7 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.config.database import startDB
 from src.config.settings import settings
-from src.utils import hash_password, verify_password
+from src.utils import delete_minio, hash_password, verify_password
 from ..models.user import User
 from ..config.settings import MinioBaseUrl
 from ..config.storage import bucket, minio_client
@@ -508,8 +508,7 @@ async def test_privilege_unverified_user(test_db, client: AsyncClient):
 @pytest.mark.anyio
 async def test_unauthorized_privilege_change(test_db, client: AsyncClient):
     user_list = users()
-
-    await user_list[1].create()
+    
     await user_list[2].create()
 
     response = await client.post(
@@ -523,17 +522,15 @@ async def test_unauthorized_privilege_change(test_db, client: AsyncClient):
     assert response.status_code == 200
 
     response = await client.patch(
-        "/users/"+user_list[1].username+"/privileges/invalid")
+        "/users/"+user_list[2].username+"/privileges/admin")
     assert response.status_code == 401
     assert response.json()["detail"] == "This action requires admin privileges"
 
-    user = await User.find_one(User.username == user_list[1].username)
-    assert user_list[1].privileges == user.privileges
+    user = await User.find_one(User.username == user_list[2].username)
+    assert user_list[2].privileges == user.privileges
 
     await User.delete_all()
 
-
-# TODO - remove images from minio after tests
 
 # Profile picture change
 @pytest.mark.anyio
@@ -559,8 +556,8 @@ async def test_user_change_profile_pic(test_db, client: AsyncClient):
     )
     print(response)
     assert response.status_code == 200
-    assert response.json()["pic_url"] == MinioBaseUrl+bucket+"/"+str(
-        list_users[1].id)+"_thumbnail.jpeg"
+    assert response.json()["pic_url"] == MinioBaseUrl + \
+        bucket+"/"+list_users[1].username+"/thumbnail.jpeg"
 
     # Test PNG
     file = "pizza.png"
@@ -570,8 +567,8 @@ async def test_user_change_profile_pic(test_db, client: AsyncClient):
         "/users/"+list_users[1].username+"/profile_pic", files=_files
     )
     assert response.status_code == 200
-    assert response.json()["pic_url"] == MinioBaseUrl+bucket+"/"+str(
-        list_users[1].id)+"_thumbnail.png"
+    assert response.json()["pic_url"] == MinioBaseUrl + \
+        bucket+"/"+list_users[1].username+"/thumbnail.png"
 
     response = await client.get("/auth/logout")
     assert response.status_code == 200
@@ -603,8 +600,8 @@ async def test_admin_change_other_profile_pic(test_db, client: AsyncClient):
     )
     print(response.json())
     assert response.status_code == 200
-    assert response.json()["pic_url"] == MinioBaseUrl+bucket+"/"+str(
-        list_users[1].id)+"_thumbnail.jpeg"
+    assert response.json()["pic_url"] == MinioBaseUrl + \
+        bucket+"/"+list_users[1].username+"/thumbnail.jpeg"
 
     # Test PNG
     file = "pizza.png"
@@ -614,8 +611,8 @@ async def test_admin_change_other_profile_pic(test_db, client: AsyncClient):
         "/users/"+list_users[1].username+"/profile_pic", files=_files
     )
     assert response.status_code == 200
-    assert response.json()["pic_url"] == MinioBaseUrl+bucket+"/"+str(
-        list_users[1].id)+"_thumbnail.png"
+    assert response.json()["pic_url"] == MinioBaseUrl + \
+        bucket+"/"+list_users[1].username+"/thumbnail.png"
 
     response = await client.get("/auth/logout")
     assert response.status_code == 200
@@ -731,11 +728,12 @@ async def test_non_admin_change_other_profile_pic(test_db, client: AsyncClient):
         "detail"] == "Need admin privilege to change another's user profile picture"
 
 
+# Delete all minio items
 @pytest.mark.anyio
 async def test_clear_bucket(test_db, client: AsyncClient):
     objects = minio_client.list_objects(bucket, recursive=True)
     for obj in objects:
-        minio_client.remove_object(bucket, obj.object_name)
+        delete_minio(file_name=obj.object_name)
 
     objects = minio_client.list_objects(bucket, recursive=True)
 

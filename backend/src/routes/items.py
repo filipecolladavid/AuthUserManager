@@ -100,7 +100,7 @@ async def create_item(
     responses={
         400: {"model": ErrorMessage, "description": "Invalid parameter"},
         401: {"model": ErrorMessage, "description": "Unauthorized"},
-        404: {"model": ErrorMessage, "description": "User not found"}
+        404: {"model": ErrorMessage, "description": "Post not found"}
     })
 async def update_item(
         item_id: str,
@@ -155,6 +155,9 @@ async def update_item(
 
     if img:
         pic_url = add_minio(img=img, user=user, item=item)
+        print("pic_url: "+pic_url)
+        if pic_url != item.pic_url:
+            delete_minio(url=item.pic_url)
         item.pic_url = pic_url
 
     return await item.save()
@@ -171,20 +174,20 @@ async def update_item(
     }
 )
 async def delete_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
-    user = User.get(user_id)
-
-    if user.username != item.author or user.privilege < Privileges.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Need admin privilege to delete another users post"
-        )
-
-    item = Item.get(item_id)
+    user = await User.get(user_id)
+    print(item_id)
+    item = await Item.get(item_id)
 
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post does not exist anymore"
+        )
+
+    if user.username != item.author and user.privileges < Privileges.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Need admin privilege to delete another users post"
         )
 
     pic_url = item.pic_url
