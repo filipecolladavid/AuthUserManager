@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, status, HTTPException
 
-from src.utils import ErrorMessage, add_minio
+from src.utils import ErrorMessage, add_minio, delete_minio
 
 from ..models.user import User, UserResponse, Privileges
 from .. import oauth2
@@ -76,7 +76,10 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
             detail="Need admin privilege to delete another user",
         )
 
+    pic_url = user.pic_url
     await user.delete()
+    if pic_url:
+        delete_minio(url=user.pic_url)
 
     return {}
 

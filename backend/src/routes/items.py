@@ -5,15 +5,18 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile, status, HTTPExce
 
 from src.config.settings import Allowed_types
 from src.models.user import Privileges, User
-from src.utils import add_minio, SuccessMessage, ErrorMessage
+from src.utils import add_minio, SuccessMessage, ErrorMessage, delete_minio
 
 from ..models.items import Item, Visibility
 from .. import oauth2
 
 router = APIRouter()
 
+# TODO - get users items
 
 # Returns posts filtered by who's making the request
+
+
 @router.get('/', response_model=List[Item])
 async def get_all(user_id: str = Depends(oauth2.require_id)):
     if not user_id:
@@ -178,7 +181,10 @@ async def delete_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post does not exist anymore"
         )
-
+    
+    pic_url = item.pic_url
     await item.delete()
+    if pic_url:
+        delete_minio(url=item.pic_url)
 
     return status.HTTP_204_NO_CONTENT
