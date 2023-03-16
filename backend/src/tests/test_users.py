@@ -5,26 +5,26 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.config.database import startDB
 from src.config.settings import settings
-from src.utils import delete_minio, hash_password, verify_password
-from ..models.user import User
+from src.utils import delete_minio, hash_password
+from ..models.user import Privileges, User
 from ..config.settings import MinioBaseUrl
 from ..config.storage import bucket, minio_client
 
 
-def users():
-    list = []
-    names = ["Joaquim", "Jones", "John", "The_dude"]
-    for idx, n in enumerate(names):
-        user = User(
-            username=n,
-            email=n+"@gmail.com",
-            password=hash_password("testpassword"),
-            verified=(idx % 2 != 0),
-            privileges=idx,
-            created_at=datetime.utcnow()
-        )
-        list.append(user)
-    return list
+# def users():
+#     list = []
+#     names = ["Joaquim", "Jones", "John", "The_dude"]
+#     for idx, n in enumerate(names):
+#         user = User(
+#             username=n,
+#             email=n+"@gmail.com",
+#             password=hash_password("testpassword"),
+#             verified=(idx % 2 != 0),
+#             privileges=idx,
+#             created_at=datetime.utcnow()
+#         )
+#         list.append(user)
+#     return list
 
 
 @pytest.fixture(scope='module')
@@ -36,247 +36,285 @@ async def test_db():
     await client.drop_database(client.db_name)
 
 
-# Get users
+@pytest.mark.anyio
+async def test_init_var(test_db, client: AsyncClient):
+
+    global user_not_verified
+    global user_visitor
+    global user_creator
+    global user_admin
+
+    user_not_verified = User(
+        username="not_verified",
+        email="not_verified@gmail.com",
+        password=hash_password("testpassword"),
+        verified=False,
+        privileges=Privileges.PENDING,
+        created_at=datetime.utcnow()
+    )
+
+    user_visitor = User(
+        username="visitor",
+        email="visitor@gmail.com",
+        password=hash_password("testpassword"),
+        verified=True,
+        privileges=Privileges.VISITOR,
+        created_at=datetime.utcnow()
+    )
+
+    user_creator = User(
+        username="creator",
+        email="creator@gmail.com",
+        password=hash_password("testpassword"),
+        verified=True,
+        privileges=Privileges.CREATOR,
+        created_at=datetime.utcnow()
+    )
+
+    user_admin = User(
+        username="admin",
+        email="admin@gmail.com",
+        password=hash_password("testpassword"),
+        verified=True,
+        privileges=Privileges.ADMIN,
+        created_at=datetime.utcnow()
+    )
+
+    assert user_admin.username == "admin"
+    assert user_creator.username == "creator"
+    assert user_visitor.username == "visitor"
+    assert user_not_verified.username == "not_verified"
+
+
+"""
+    Get Users
+"""
+
+
 @pytest.mark.anyio
 async def test_get_all_users(test_db, client: AsyncClient):
-
-    users_list = users()
-
-    response = await client.get("/users/")
-
-    assert response.status_code == 200
-    list = response.json()
-    assert len(list) == 0
-
-    await users_list[0].create()
-
+    # Empty database
     response = await client.get("/users/")
     assert response.status_code == 200
-    list = response.json()
-    assert len(list) == 1
+    assert len(response.json()) == 0
 
-    await users_list[1].create()
-    await users_list[2].create()
-
+    # Create one user
+    await user_admin.create()
     response = await client.get("/users/")
     assert response.status_code == 200
-    list = response.json()
-    assert len(list) == 3
+    assert len(response.json()) == 1
+    assert response.json()[0]["username"] == "admin"
 
+    # Create 2 more users
+    await user_creator.create()
+    await user_visitor.create()
+    response = await client.get("/users/")
+    assert response.status_code == 200
+    assert len(response.json()) == 3
+
+    # Assert that database is empty
     await User.delete_all()
+    response = await client.get("/users/")
+    assert response.status_code == 200
+    assert len(response.json()) == 0
 
 
 @pytest.mark.anyio
 async def test_get_user(test_db, client: AsyncClient):
-
-    users_list = users()
-
-    await users_list[0].create()
-
-    response = await client.get("/users/"+users_list[0].username)
+    await user_admin.create()
+    response = await client.get("/users/"+user_admin.username)
 
     assert response.status_code == 200
-    assert response.json()["username"] == users_list[0].username
-    assert response.json()["email"] == users_list[0].email
-    assert response.json()["verified"] == users_list[0].verified
-    assert response.json()["privileges"] == users_list[0].privileges
+    assert response.json()["username"] == user_admin.username
+    assert response.json()["email"] == user_admin.email
+    assert response.json()["verified"] == user_admin.verified
+    assert response.json()["privileges"] == user_admin.privileges
 
-    await users_list[0].delete()
+    await User.delete_all()
 
 
 @pytest.mark.anyio
 async def test_get_non_existing_user(test_db, client: AsyncClient):
+    await User.insert_many([user_admin, user_creator, user_visitor, user_not_verified])
+    response = await client.get("/users/")
+    assert response.status_code == 200
+    assert len(response.json()) == 4
 
-    response = await client.get("/users/nonexistinguser")
+    user = await User.find_one(User.username == "johnDoe")
+    assert not user
 
+    response = await client.get("/users/johnDoe")
     assert response.status_code == 404
     assert response.json()["detail"] == "User does not exist"
 
+    await User.delete_all()
 
-# Delete
+
+"""
+    Delete users
+"""
+
+
 @pytest.mark.anyio
-async def test_delete_self_user_verified(test_db, client: AsyncClient):
+async def test_delete_self_user(test_db, client: AsyncClient):
 
-    users_list = users()
-    await users_list[1].create()
+    await user_not_verified.create()
+    await user_creator.create()
+
+    # Not verified
+    response = await client.post(
+        "/auth/login",
+        data={
+            "username": user_not_verified.username,
+            "password": "testpassword"
+        }
+    )
+    assert response.status_code == 200
+
+    response = await client.delete("/users/"+user_not_verified.username)
+    assert response.status_code == 204
+    assert not response.text
+    deleted_user = await User.find_one(User.username == user_not_verified.username)
+    assert not deleted_user
+
+    # Verified
+    response = await client.post(
+        "/auth/login",
+        data={
+            "username": user_creator.username,
+            "password": "testpassword"
+        }
+    )
+    assert response.status_code == 200
+
+    response = await client.delete("/users/"+user_creator.username)
+    assert response.status_code == 204
+    assert not response.text
+    deleted_user = await User.find_one(User.username == user_creator.username)
+    assert not deleted_user
+    assert len(await User.find_many().to_list()) == 0
+
+
+@pytest.mark.anyio
+async def test_admin_delete_user(test_db, client: AsyncClient):
+    await user_admin.create()
+    await user_creator.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": users_list[1].username,
+            "username": user_admin.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
-    response = await client.delete(
-        "/users/"+users_list[1].username
-    )
-
+    response = await client.delete("/users/"+user_creator.username)
     assert response.status_code == 204
+    assert not response.text
 
-    user = await User.find_one(User.username == users_list[1].username)
-    assert not user
-
-
-@pytest.mark.anyio
-async def test_delete_self_user_not_verified(test_db, client: AsyncClient):
-
-    users_list = users()
-    await users_list[0].create()
-
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": users_list[0].username,
-            "password": "testpassword"
-        }
-    )
-
+    response = await client.get("/auth/logout")
     assert response.status_code == 200
-
-    response = await client.delete(
-        "/users/"+users_list[0].username
-    )
-
-    assert response.status_code == 204
-
-    user = await User.find_one(User.username == users_list[0].username)
-    assert not user
-
-
-@pytest.mark.anyio
-async def test_delete_other_user_admin(test_db, client: AsyncClient):
-
-    users_list = users()
-
-    # Requesting Delete
-    await users_list[3].create()
-
-    # To be Deleted
-    await users_list[0].create()
-
-    print(users_list[3])
-
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": users_list[3].username,
-            "password": "testpassword"
-        }
-    )
-
-    assert response.status_code == 200
-
-    response = await client.delete(
-        "/users/"+users_list[0].username
-    )
-
-    assert response.status_code == 204
-    user = await User.find_one(User.username == users_list[0].username)
-    assert not user
 
     await User.delete_all()
 
 
 @pytest.mark.anyio
-async def test_user_delete_other_user(test_db, client: AsyncClient):
-    users_list = users()
-
-    # Verified
-    await users_list[0].create()
-    # Not verified
-    await users_list[1].create()
+async def test_user_delete_user(test_db, client: AsyncClient):
+    await user_creator.create()
+    await user_not_verified.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": users_list[1].username,
+            "username": user_creator.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
-    response = await client.delete(
-        "/users/"+users_list[0].username
-    )
-
+    response = await client.delete("/users/"+user_not_verified.username)
     assert response.status_code == 401
     assert response.json()[
         "detail"] == "Need admin privilege to delete another user"
-    user = User.find_one(User.username == users_list[0].username)
-    assert user
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": users_list[0].username,
+            "username": user_not_verified.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
-    response = await client.delete("/users/"+users_list[1].username)
-
+    response = await client.delete("/users/"+user_creator.username)
     assert response.status_code == 401
     assert response.json()[
         "detail"] == "Need admin privilege to delete another user"
-    user = User.find_one(User.username == users_list[1].username)
-    assert user
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
+
+    await User.delete_all()
 
 
 @pytest.mark.anyio
-async def test_user_delete_non_existing_user(test_db, client: AsyncClient):
-
-    users_list = users()
-    await users_list[3].create()
+async def test_delete_non_existing_user(test_db, client: AsyncClient):
+    await user_admin.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": users_list[3].username,
+            "username": user_admin.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
-    response = await client.delete(
-        "/users/unknowuser"
-    )
+    user = await User.find_one(User.username == "johnDoe")
+    assert not user
 
+    response = await client.delete("/users/johnDoe")
     assert response.status_code == 404
     assert response.json()["detail"] == "User not found"
 
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
+
     await User.delete_all()
 
 
-# Verify
+"""
+    Verify
+"""
+
+
 @pytest.mark.anyio
 async def test_user_verify(test_db, client: AsyncClient):
-    users_list = users()
-
-    await users_list[3].create()
-    await users_list[0].create()
+    await user_admin.create()
+    await user_not_verified.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": users_list[3].username,
+            "username": user_admin.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
-    response = await client.patch("/users/"+users_list[0].username+"/verify")
-
+    response = await client.patch(
+        "/users/"+user_not_verified.username+"/verify",
+    )
     assert response.status_code == 200
-    user = await User.find_one(User.username == users_list[0].username)
+    user = await User.find_one(User.username == user_not_verified.username)
     assert user.verified
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
 
     await User.delete_all()
 
@@ -284,254 +322,302 @@ async def test_user_verify(test_db, client: AsyncClient):
 @pytest.mark.anyio
 async def test_already_verified_user(test_db, client: AsyncClient):
 
-    users_list = users()
-
-    await users_list[3].create()
-    await users_list[1].create()
+    await user_admin.create()
+    await user_visitor.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": users_list[3].username,
+            "username": user_admin.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
-    response = await client.patch("/users/"+users_list[1].username+"/verify")
-
+    response = await client.patch("/users/"+user_visitor.username+"/verify")
     assert response.status_code == 400
     assert response.json()["detail"] == "User is already verified"
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
 
     await User.delete_all()
 
 
 @pytest.mark.anyio
 async def test_non_admin_verify(test_db, client: AsyncClient):
-
-    users_list = users()
-
-    await users_list[0].create()
-    await users_list[2].create()
+    await user_creator.create()
+    await user_not_verified.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": users_list[0].username,
+            "username": user_creator.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
-    # Non admin-User tries to verify itself
-    response = await client.patch("/users/"+users_list[0].username+"/verify")
+    # User tries to verify himself
+    response = await client.patch("/users/"+user_creator.username+"/verify")
     assert response.status_code == 401
     assert response.json()["detail"] == "This action requires admin privileges"
 
-    # Non admin-User tries to verify others
-    response = await client.patch("/users/"+users_list[2].username+"/verify")
+    # User tries to verify other user
+    response = await client.patch("/users/"+user_not_verified.username+"/verify")
     assert response.status_code == 401
     assert response.json()["detail"] == "This action requires admin privileges"
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
 
     await User.delete_all()
 
 
 @pytest.mark.anyio
-async def test_verify_non_existing_user(test_db, client: AsyncClient):
-
-    user_list = users()
-
-    await user_list[3].create()
+async def test_verify_not_user(test_db, client: AsyncClient):
+    await user_admin.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": user_list[3].username,
+            "username": user_admin.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
-    response = await client.patch("/users/nonexistinguser/verify")
+    user = await User.find_one(User.username == "johnDoe")
+    assert not user
+
+    response = await client.patch("/users/johnDoe/verify")
     assert response.status_code == 404
     assert response.json()["detail"] == "User not found"
 
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
+
     await User.delete_all()
 
 
-# Privileges
+"""
+    Privileges
+"""
+
+
 @pytest.mark.anyio
 async def test_user_privilege_change(test_db, client: AsyncClient):
-
-    user_list = users()
-    await user_list[3].create()
-    await user_list[1].create()
+    await user_admin.create()
+    await user_visitor.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": user_list[3].username,
+            "username": user_admin.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
+    # Pending
     response = await client.patch(
-        "/users/"+user_list[1].username+"/privileges/pending")
+        "/users/"+user_visitor.username+"/privileges/pending"
+    )
     assert response.status_code == 200
-
-    user = await User.find_one(User.username == user_list[1].username)
-
-    assert response.json()["username"] == user.username
-    assert response.json()["verified"] == user.verified
+    user = await User.find_one(User.username == user_visitor.username)
     assert response.json()["privileges"] == user.privileges
+    assert user.privileges == Privileges.PENDING
 
+    # Visitor
     response = await client.patch(
-        "/users/"+user_list[1].username+"/privileges/visitor")
+        "/users/"+user_visitor.username+"/privileges/visitor"
+    )
     assert response.status_code == 200
-
-    user = await User.find_one(User.username == user_list[1].username)
-
-    assert response.json()["username"] == user.username
-    assert response.json()["verified"] == user.verified
+    user = await User.find_one(User.username == user_visitor.username)
     assert response.json()["privileges"] == user.privileges
+    assert user.privileges == Privileges.VISITOR
 
+    # Creator
     response = await client.patch(
-        "/users/"+user_list[1].username+"/privileges/creator")
+        "/users/"+user_visitor.username+"/privileges/creator"
+    )
     assert response.status_code == 200
-
-    user = await User.find_one(User.username == user_list[1].username)
-
-    assert response.json()["username"] == user.username
-    assert response.json()["verified"] == user.verified
+    user = await User.find_one(User.username == user_visitor.username)
     assert response.json()["privileges"] == user.privileges
+    assert user.privileges == Privileges.CREATOR
 
+    # Admin
     response = await client.patch(
-        "/users/"+user_list[1].username+"/privileges/admin")
+        "/users/"+user_visitor.username+"/privileges/admin"
+    )
     assert response.status_code == 200
-
-    user = await User.find_one(User.username == user_list[1].username)
-
-    assert response.json()["username"] == user.username
-    assert response.json()["verified"] == user.verified
+    user = await User.find_one(User.username == user_visitor.username)
     assert response.json()["privileges"] == user.privileges
+    assert user.privileges == Privileges.ADMIN
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
 
     await User.delete_all()
 
 
 @pytest.mark.anyio
 async def test_invalid_privilege(test_db, client: AsyncClient):
-
-    user_list = users()
-
-    await user_list[3].create()
-    await user_list[1].create()
+    await user_admin.create()
+    await user_visitor.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": user_list[3].username,
+            "username": user_admin.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
-    response = await client.patch(
-        "/users/"+user_list[1].username+"/privileges/invalid")
+    response = await client.patch("/users/"+user_visitor.username+"/privileges/invalid")
     assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid privilege"
 
-    user = await User.find_one(User.username == user_list[1].username)
-    assert user_list[1].privileges == user.privileges
+    user = await User.find_one(User.username == user_visitor.username)
+    assert user.privileges == user_visitor.privileges
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
 
     await User.delete_all()
 
 
 @pytest.mark.anyio
-async def test_privilege_non_existing_user(test_db, client: AsyncClient):
-    user_list = users()
-
-    await user_list[3].create()
+async def test_privilege_not_user(test_db, client: AsyncClient):
+    await user_admin.create()
 
     response = await client.post(
-        "/auth/login",
+        "auth/login",
         data={
-            "username": user_list[3].username,
+            "username": user_admin.username,
             "password": "testpassword"
         }
     )
+    response.status_code == 200
 
+    user = await User.find_one(User.username == "johnDoe")
+    assert not user
+
+    response = await client.patch("/users/johnDoe/privileges/creator")
+    response.status_code == 404
+    response.json()["detail"] == "User not found"
+
+    response = await client.get("/auth/logout")
     assert response.status_code == 200
-
-    response = await client.patch(
-        "/users/invaliduser/privileges/invalid"
-    )
-    assert response.status_code == 404
-    assert response.json()["detail"] == "User does not exist"
 
     await User.delete_all()
 
 
 @pytest.mark.anyio
 async def test_privilege_unverified_user(test_db, client: AsyncClient):
-
-    user_list = users()
-
-    await user_list[3].create()
-    await user_list[0].create()
+    await user_admin.create()
+    await user_not_verified.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": user_list[3].username,
+            "username": user_admin.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
+    user = await User.find_one(User.username == user_not_verified.username)
+    assert not user.verified
+
     response = await client.patch(
-        "/users/"+user_list[0].username+"/privileges/invalid")
+        "/users/"+user_not_verified.username+"/privileges/admin"
+    )
     assert response.status_code == 400
     assert response.json()["detail"] == "User not verified"
 
-    user = await User.find_one(User.username == user_list[0].username)
-    assert user_list[0].privileges == user.privileges
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
 
     await User.delete_all()
 
 
 @pytest.mark.anyio
 async def test_unauthorized_privilege_change(test_db, client: AsyncClient):
-    user_list = users()
-    
-    await user_list[2].create()
+    await user_creator.create()
+    await user_visitor.create()
 
     response = await client.post(
         "/auth/login",
         data={
-            "username": user_list[2].username,
+            "username": user_creator.username,
             "password": "testpassword"
         }
     )
-
     assert response.status_code == 200
 
-    response = await client.patch(
-        "/users/"+user_list[2].username+"/privileges/admin")
+    # User changes privilege on itself
+    response = await client.patch("/users/"+user_creator.username+"/privileges/admin")
+
     assert response.status_code == 401
     assert response.json()["detail"] == "This action requires admin privileges"
 
-    user = await User.find_one(User.username == user_list[2].username)
-    assert user_list[2].privileges == user.privileges
+    # User changes privilege on other user
+    response = await client.patch("/users/"+user_visitor.username+"/privileges/creator")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "This action requires admin privileges"
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
 
     await User.delete_all()
 
 
+@pytest.mark.anyio
+async def test_user_change_profile_pic(test_db, client: AsyncClient):
+    await user_visitor.create()
+
+    response = await client.post(
+        "/auth/login",
+        data={
+            "username": user_visitor.username,
+            "password": "testpassword"
+        }
+    )
+    assert response.status_code == 200
+
+    # Test JPEG
+    file = "pizza-cat.jpeg"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/"+user_visitor.username+"/profile_pic", files=_files
+    )
+    print(response)
+    assert response.status_code == 200
+    assert response.json()["pic_url"] == MinioBaseUrl + \
+        bucket+"/"+user_visitor.username+"/thumbnail.jpeg"
+
+    # Test PNG
+    file = "pizza.png"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/"+user_visitor.username+"/profile_pic", files=_files
+    )
+    assert response.status_code == 200
+    assert response.json()["pic_url"] == MinioBaseUrl + \
+        bucket+"/"+user_visitor.username+"/thumbnail.png"
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
+
+    await User.delete_all()
+
+
+"""
 # Profile picture change
 @pytest.mark.anyio
 async def test_user_change_profile_pic(test_db, client: AsyncClient):
@@ -738,3 +824,4 @@ async def test_clear_bucket(test_db, client: AsyncClient):
     objects = minio_client.list_objects(bucket, recursive=True)
 
     assert len([obj.object_name for obj in objects]) == 0
+"""

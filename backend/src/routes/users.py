@@ -133,7 +133,7 @@ async def change_user_privileges(username: str, privileges: str, user_id: str = 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User does not exist',
+            detail='User not found',
         )
 
     # User requesting the change
