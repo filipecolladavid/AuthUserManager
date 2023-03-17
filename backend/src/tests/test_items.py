@@ -1,13 +1,14 @@
 from datetime import datetime
+from bson import ObjectId
 import pytest
 from httpx import AsyncClient
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.config.database import startDB
 from src.config.settings import MinioBaseUrl, settings
-from src.config.storage import bucket
+from src.config.storage import bucket, minio_client
 from src.models.items import Item, Visibility
-from src.utils import hash_password, verify_password
+from src.utils import hash_password, verify_password, delete_minio
 from src.tests.test_utils import login, logout
 from ..models.user import User, Privileges
 
@@ -175,6 +176,51 @@ async def test_get_items_admins(test_db, client: AsyncClient):
 """
     Create Item
 """
+
+
+@pytest.mark.anyio
+async def test_create_item(test_db, client: AsyncClient):
+
+    await user_creator.create()
+    await login(user_creator.username, "testpassword", client)
+
+    file = "pizza-cat.jpeg"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.post(
+        "/items/",
+        files=_files,
+        data={
+            "title": "A title for a picture",
+            "desc": "A desc for a picture",
+        }
+    )
+
+    assert response.status_code == 200
+    item_id = response.json()["_id"]
+
+    db_item = await Item.get(item_id)
+
+    assert db_item
+    assert response.json()["title"] == "A title for a picture"
+    assert response.json()["title"] == db_item.title
+    assert response.json()["desc"] == "A desc for a picture"
+    assert response.json()["desc"] == db_item.desc
+    assert response.json()["visibility"] == Visibility.ALL
+    assert response.json()["visibility"] == db_item.visibility
+    assert response.json()["author"] == user_creator.username
+    assert response.json()["author"] == db_item.author
+    assert response.json()["pic_url"] == MinioBaseUrl + \
+        bucket+"/"+user_creator.username+"/"+item_id+".jpeg"
+    assert response.json()["pic_url"] == db_item.pic_url
+
+    obj = delete_minio(db_item.pic_url)
+    assert obj
+
+    await logout(client)
+    obj = delete_minio(db_item.pic_url)
+    assert not obj
+    await User.delete_all()
 
 """
 

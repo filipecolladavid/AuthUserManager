@@ -2,7 +2,7 @@ import os
 from passlib.context import CryptContext
 from fastapi import status, HTTPException
 from urllib import parse
-from minio import InvalidResponseError
+from minio import InvalidResponseError, S3Error
 from pydantic import BaseModel
 
 from src.config.settings import Allowed_types, MinioBaseUrl
@@ -89,8 +89,19 @@ def delete_minio(url: str = None, file_name: str = None):
         obj_name = url.split("/")[4]+"/"+url.split("/")[5]
     else:
         obj_name = file_name
+    try:
+        obj = minio_client.get_object(bucket, obj_name)
+        minio_client.remove_object(bucket, obj_name)
+        return obj
 
-    minio_client.remove_object(bucket, obj_name)
+    except S3Error as err:
+        return None
+
+    except InvalidResponseError as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=err.message
+        )
 
 
 def clear_bucket():
