@@ -8,6 +8,7 @@ from src.config.settings import MinioBaseUrl, settings
 from src.config.storage import bucket
 from src.models.items import Item, Visibility
 from src.utils import hash_password, verify_password
+from src.tests.test_utils import login, logout
 from ..models.user import User, Privileges
 
 
@@ -75,8 +76,6 @@ async def test_init_env(test_db, client: AsyncClient):
         created_at=datetime.utcnow()
     )
 
-    await User.insert_many([user_not_verified, user_visitor, user_creator, user_admin])
-
     item_all = Item(
         title="A post for all",
         desc="A post for all",
@@ -104,152 +103,88 @@ async def test_init_env(test_db, client: AsyncClient):
         created_at=datetime.utcnow()
     )
 
-    await Item.insert_many([item_all, item_users, item_admin])
+    assert user_admin.username == "admin"
+    assert user_creator.username == "creator"
+    assert user_visitor.username == "visitor"
+    assert user_not_verified.username == "not_verified"
 
-    response = await client.get("/users/")
-
-    assert response.status_code == 200
-    assert len(response.json()) == 4
-
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-
-    assert response.status_code == 200
-
-    response = await client.get("/items/")
-    assert response.status_code == 200
-    assert len(response.json()) == 3
-
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+"""
+    Get items
+"""
 
 
-# Get items
 @pytest.mark.anyio
 async def test_get_items_non_users(test_db, client: AsyncClient):
+    await item_all.create()
+    await item_users.create()
+    await item_admin.create()
 
-    """
-        Testing for a non-user
-    """
-    response = await client.get("/items/")
-    assert response.status_code == 200
-    items = response.json()
     db_items = await Item.find(Item.visibility <= Visibility.ALL).to_list()
 
-    assert len(db_items) == len(items)
-    assert not has_visibility_greater_than(items, Visibility.ALL)
-
-    """
-        Testing for an user not verified
-        Doesn't have access to posts restricted to users
-    """
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_not_verified.username,
-            "password": "testpassword"
-        }
-    )
+    response = await client.get("/items/")
     assert response.status_code == 200
+    assert len(response.json()) == len(db_items)
+    assert not has_visibility_greater_than(response.json(), Visibility.ALL)
+
+    # Not verified user
+    await user_not_verified.create()
+    await login(user_not_verified.username, "testpassword", client)
 
     response = await client.get("/items/")
-    items = response.json()
-    db_items = await Item.find(Item.visibility <= Visibility.ALL).to_list()
-
-    assert len(db_items) == len(items)
-    assert not has_visibility_greater_than(items, Visibility.ALL)
-
-    response = await client.get("/auth/logout")
     assert response.status_code == 200
+    assert len(response.json()) == len(db_items)
+    assert not has_visibility_greater_than(response.json(), Visibility.ALL)
+
+    await logout(client)
+
+    await User.delete_all()
 
 
 @pytest.mark.anyio
 async def test_get_items_users(test_db, client: AsyncClient):
-    """
-        Testing for an user with visitor privileges
-        Access to posts restricted to users
-    """
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_visitor.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await user_visitor.create()
+    await login(user_visitor.username, "testpassword", client)
 
     response = await client.get("/items/")
-    items = response.json()
     db_items = await Item.find(Item.visibility <= Visibility.USERS).to_list()
-
-    assert len(db_items) == len(items)
-    assert not has_visibility_greater_than(items, Visibility.USERS)
-
-    response = await client.get("/auth/logout")
     assert response.status_code == 200
+    assert len(response.json()) == len(db_items)
+    assert not has_visibility_greater_than(response.json(), Visibility.USERS)
 
-    """
-        Testing for an user with creator privileges
-        Access to posts restricted to users
-    """
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_creator.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await logout(client)
 
-    response = await client.get("/items/")
-    items = response.json()
-    db_items = await Item.find(Item.visibility <= Visibility.USERS).to_list()
-
-    assert len(db_items) == len(items)
-    assert not has_visibility_greater_than(items, Visibility.USERS)
-
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await User.delete_all()
 
 
 @pytest.mark.anyio
 async def test_get_items_admins(test_db, client: AsyncClient):
-    """
-        Testing for an user with creator privileges
-        Access to posts restricted to users
-    """
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await user_admin.create()
+    await login(user_admin.username, "testpassword", client)
 
     response = await client.get("/items/")
-    items = response.json()
     db_items = await Item.find(Item.visibility <= Visibility.ADMIN).to_list()
-
-    assert len(db_items) == len(items)
-    assert not has_visibility_greater_than(items, Visibility.ADMIN)
-
-    response = await client.get("/auth/logout")
     assert response.status_code == 200
+    assert len(response.json()) == len(db_items)
+    assert not has_visibility_greater_than(response.json(), Visibility.ADMIN)
+
+    await logout(client)
+
+    await User.delete_all()
+
+
+"""
+    Create Item
+"""
+
+"""
 
 
 # Create item
 @pytest.mark.anyio
 async def test_create_item(test_db, client: AsyncClient):
 
-    """
-        Admin creates post
-    """
+        # Admin creates post
+
     response = await client.post(
         "/auth/login",
         data={
@@ -262,9 +197,8 @@ async def test_create_item(test_db, client: AsyncClient):
     file = "pizza-cat.jpeg"
     _files = {'img': open(file, 'rb')}
 
-    """
-        With default visibility
-    """
+        # With default visibility
+
     response = await client.post(
         "/items/",
         files=_files,
@@ -286,9 +220,8 @@ async def test_create_item(test_db, client: AsyncClient):
     response = await client.get("/auth/logout")
     assert response.status_code == 200
 
-    """
-        Creator creates post
-    """
+        # Creator creates post
+
     response = await client.post(
         "/auth/login",
         data={
@@ -301,9 +234,8 @@ async def test_create_item(test_db, client: AsyncClient):
     file = "pizza-cat.jpeg"
     _files = {'img': open(file, 'rb')}
 
-    """
-        With default visibility
-    """
+        # With default visibility
+
     response = await client.post(
         "/items/",
         files=_files,
@@ -322,9 +254,7 @@ async def test_create_item(test_db, client: AsyncClient):
     assert response.json()["pic_url"] == MinioBaseUrl + \
         bucket+"/"+user_creator.username+"/"+item_id+".jpeg"
 
-    """
-        With all visibility
-    """
+        # With all visibility
     response = await client.post(
         "/items/",
         files=_files,
@@ -344,9 +274,7 @@ async def test_create_item(test_db, client: AsyncClient):
     assert response.json()["pic_url"] == MinioBaseUrl + \
         bucket+"/"+user_creator.username+"/"+item_id+".jpeg"
 
-    """
-        With users visibility
-    """
+        # With users visibility
     response = await client.post(
         "/items/",
         files=_files,
@@ -366,9 +294,8 @@ async def test_create_item(test_db, client: AsyncClient):
     assert response.json()["pic_url"] == MinioBaseUrl + \
         bucket+"/"+user_creator.username+"/"+item_id+".jpeg"
 
-    """
-        With admin visibility
-    """
+        # With admin visibility
+
     response = await client.post(
         "/items/",
         files=_files,
@@ -403,9 +330,8 @@ async def test_create_item_invalid_parameter(test_db, client: AsyncClient):
     )
     assert response.status_code == 200
 
-    """
-        Invalid visibility
-    """
+        # Invalid visibility
+
     file = "pizza-cat.jpeg"
     _files = {'img': open(file, 'rb')}
 
@@ -445,9 +371,7 @@ async def test_create_item_invalid_parameter(test_db, client: AsyncClient):
 @pytest.mark.anyio
 async def test_create_item_unauthorized(test_db, client: AsyncClient):
 
-    """
-        Not logged in
-    """
+        # Not logged in
 
     file = "pizza-cat.jpeg"
     _files = {'img': open(file, 'rb')}
@@ -465,9 +389,8 @@ async def test_create_item_unauthorized(test_db, client: AsyncClient):
     assert response.status_code == 401
     assert response.json()["detail"] == "You are not logged in"
 
-    """
-        Not verified
-    """
+        # Not verified
+
     response = await client.post(
         "/auth/login",
         data={
@@ -496,9 +419,8 @@ async def test_create_item_unauthorized(test_db, client: AsyncClient):
     response = await client.get("/auth/logout")
     assert response.status_code == 200
 
-    """
-        Not a creator
-    """
+        # Not a creator
+
     response = await client.post(
         "/auth/login",
         data={
@@ -541,9 +463,7 @@ async def test_update_item(test_db, client: AsyncClient):
     )
     assert response.status_code == 200
 
-    """
-        Update all fields
-    """
+        # Update all fields
 
     file = "pizza.png"
     _files = {'img': open(file, 'rb')}
@@ -569,9 +489,8 @@ async def test_update_item(test_db, client: AsyncClient):
     assert response.json()["pic_url"] == MinioBaseUrl + \
         bucket+"/"+user_admin.username+"/"+item_id+".png"
 
-    """
-        Update just Title, Desc and Visibility
-    """
+    #    Update just Title, Desc and Visibility
+
     item = await Item.find_one(Item.title == "Changed title")
     item_id = str(item.id)
 
@@ -671,9 +590,6 @@ async def test_update_invalid_parameter(test_db, client: AsyncClient):
     )
     assert response.status_code == 200
 
-    """
-        Invalid visibility
-    """
     item = await Item.find_one(Item.title == item_all.title)
     item_id = str(item.id)
 
@@ -746,9 +662,6 @@ async def test_update_unauthorized(test_db, client: AsyncClient):
 @pytest.mark.anyio
 async def test_delete_post(test_db, client: AsyncClient):
 
-    """
-        Admin deletes post
-    """
     custom_item = Item(
         title="Custom item",
         desc="Custom item",
@@ -776,9 +689,6 @@ async def test_delete_post(test_db, client: AsyncClient):
     response = await client.get("/auth/logout")
     assert response.status_code == 200
 
-    """
-        Creator deletes post
-    """
     custom_item = Item(
         title="Custom item",
         desc="Custom item",
@@ -806,9 +716,6 @@ async def test_delete_post(test_db, client: AsyncClient):
     response = await client.get("/auth/logout")
     assert response.status_code == 200
 
-    """
-        Visitor deletes post
-    """
     custom_item = Item(
         title="Custom item",
         desc="Custom item",
@@ -839,9 +746,6 @@ async def test_delete_post(test_db, client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_admin_delete_other_post(test_db, client: AsyncClient):
-    """
-        Admin deletes post
-    """
     custom_item = Item(
         title="Custom item",
         desc="Custom item",
@@ -872,9 +776,6 @@ async def test_admin_delete_other_post(test_db, client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_user_delete_other_post(test_db, client: AsyncClient):
-    """
-        User deletes post
-    """
     custom_item = Item(
         title="Custom item",
         desc="Custom item",
@@ -907,9 +808,6 @@ async def test_user_delete_other_post(test_db, client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_user_delete_non_existing_post(test_db, client: AsyncClient):
-    """
-        User deletes post
-    """
     custom_item = Item(
         title="Custom item",
         desc="Custom item",
@@ -921,7 +819,6 @@ async def test_user_delete_non_existing_post(test_db, client: AsyncClient):
     item = await custom_item.create()
     item_id = str(item.id)
     await item.delete()
-
 
     response = await client.post(
         "/auth/login",
@@ -935,3 +832,4 @@ async def test_user_delete_non_existing_post(test_db, client: AsyncClient):
     response = await client.delete("/items/"+item_id)
     assert response.status_code == 404
     assert response.json()["detail"] == "Post does not exist anymore"
+"""
