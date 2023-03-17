@@ -91,3 +91,13 @@ def delete_minio(url: str = None, file_name: str = None):
         obj_name = file_name
 
     minio_client.remove_object(bucket, obj_name)
+
+
+def clear_bucket():
+    objects = minio_client.list_objects(bucket, recursive=True)
+    for obj in objects:
+        delete_minio(file_name=obj.object_name)
+
+    objects = minio_client.list_objects(bucket, recursive=True)
+
+    assert len([obj.object_name for obj in objects]) == 0
