@@ -490,14 +490,7 @@ async def test_user_change_profile_pic(test_db, client: AsyncClient):
 
     await user_creator.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_creator.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_creator.username, "testpassword", client)
 
     # Test JPEG
     file = "pizza-cat.jpeg"
@@ -526,8 +519,7 @@ async def test_user_change_profile_pic(test_db, client: AsyncClient):
     list = get_user_media_list(user_creator.username)
     assert len(list) == 1
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     clear_bucket()
 
@@ -539,14 +531,7 @@ async def test_admin_change_other_profile_pic(test_db, client: AsyncClient):
     await user_admin.create()
     await user_visitor.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_admin, "testpassword", client)
 
     # Test JPEG
     file = "pizza-cat.jpeg"
@@ -564,8 +549,7 @@ async def test_admin_change_other_profile_pic(test_db, client: AsyncClient):
     list = get_user_media_list(user_visitor.username)
     assert len(list) == 1
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     clear_bucket()
 
@@ -575,14 +559,8 @@ async def test_admin_change_other_profile_pic(test_db, client: AsyncClient):
 @pytest.mark.anyio
 async def test_incorrect_type_profile_pic(test_db, client: AsyncClient):
     await user_creator.create()
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_creator.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+
+    await login(user_creator.username, "testpassword", client)
 
     # Test unsuported type
     file = "conftest.py"
@@ -597,6 +575,8 @@ async def test_incorrect_type_profile_pic(test_db, client: AsyncClient):
     user = await User.find_one(User.username == user_creator.username)
     assert user.pic_url == default_url
 
+    await logout(client)
+
     await User.delete_all()
 
 
@@ -605,14 +585,7 @@ async def test_not_user_change_profile_pic(test_db, client: AsyncClient):
 
     await user_admin.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_admin.username, "testpassword", client)
 
     file = "pizza-cat.jpeg"
     _files = {'img': open(file, 'rb')}
@@ -626,8 +599,7 @@ async def test_not_user_change_profile_pic(test_db, client: AsyncClient):
     user = await User.find_one(User.username == "non_existing_username")
     assert not user
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -635,14 +607,8 @@ async def test_not_user_change_profile_pic(test_db, client: AsyncClient):
 @pytest.mark.anyio
 async def test_unverified_user_change_profile_pic(test_db, client: AsyncClient):
     await user_not_verified.create()
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_not_verified.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+
+    await login(user_not_verified, "testpassword", client)
 
     file = "pizza-cat.jpeg"
     _files = {'img': open(file, 'rb')}
@@ -656,8 +622,7 @@ async def test_unverified_user_change_profile_pic(test_db, client: AsyncClient):
     user = await User.find_one(User.username == user_not_verified.username)
     assert user.pic_url == default_url
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -667,14 +632,7 @@ async def test_non_admin_change_other_profile_pic(test_db, client: AsyncClient):
     await user_creator.create()
     await user_visitor.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_creator.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_creator.username, "testpassword", client)
 
     file = "pizza-cat.jpeg"
     _files = {'img': open(file, 'rb')}
@@ -690,7 +648,6 @@ async def test_non_admin_change_other_profile_pic(test_db, client: AsyncClient):
     user = await User.find_one(User.username == user_visitor.username)
     assert user.pic_url == default_url
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
