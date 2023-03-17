@@ -35,7 +35,7 @@ def verify_password(password: str, hashed_password: str):
 
 # Add img to minio
 def add_minio(img, user, item):
-    print(item)
+
     if img.content_type not in Allowed_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -44,7 +44,8 @@ def add_minio(img, user, item):
 
     file_size = os.fstat(img.file.fileno()).st_size
     if item:
-        file_name = user.username+"/"+str(item.id)+"." +img.content_type.split("/")[1]
+        file_name = user.username+"/" + \
+            str(item.id)+"." + img.content_type.split("/")[1]
         print(file_name)
     else:
         file_name = user.username+"/thumbnail."+img.content_type.split("/")[1]
@@ -66,9 +67,26 @@ def add_minio(img, user, item):
         )
 
 
+def delete_user_media(username: str):
+    objects_to_delete = minio_client.list_objects(
+        bucket, prefix=username, recursive=True)
+    for obj in objects_to_delete:
+        minio_client.remove_object(bucket, obj.object_name)
+
+
+def get_user_media_list(username: str):
+    objects = minio_client.list_objects(
+        bucket, prefix=username, recursive=True)
+    list = []
+
+    for obj in objects:
+        list.append(obj.object_name)
+    return list
+
+
 def delete_minio(url: str = None, file_name: str = None):
     if url:
-        obj_name = url.split("/")[4]
+        obj_name = url.split("/")[4]+"/"+url.split("/")[5]
     else:
         obj_name = file_name
 

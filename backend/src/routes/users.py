@@ -1,7 +1,9 @@
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, status, HTTPException
+from minio import InvalidResponseError
+from src.utils import ErrorMessage, add_minio, delete_minio, delete_user_media
 
-from src.utils import ErrorMessage, add_minio, delete_minio
+from src.config.storage import default_url
 
 from ..models.user import User, UserResponse, Privileges
 from .. import oauth2
@@ -76,11 +78,16 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
             detail="Need admin privilege to delete another user",
         )
 
-    #TODO - delete all users files from minio and items
     pic_url = user.pic_url
     await user.delete()
-    if pic_url:
-        delete_minio(url=user.pic_url)
+    if pic_url != default_url:
+        try:
+            delete_user_media(user.username)
+        except InvalidResponseError as err:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=err.message
+            )
 
     return {}
 
@@ -212,6 +219,9 @@ async def change_profile_picture(username: str, img: UploadFile, user_id: str = 
             detail="Need admin privilege to change another's user profile picture",
         )
 
+    if(user.pic_url != default_url):
+        print("deleted")
+        delete_minio(user.pic_url)
     user.pic_url = add_minio(img=img, user=user, item=None)
 
     await user.save()

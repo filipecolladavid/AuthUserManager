@@ -5,10 +5,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.config.database import startDB
 from src.config.settings import settings
-from src.utils import delete_minio, hash_password
+from src.utils import delete_minio, hash_password, get_user_media_list
 from ..models.user import Privileges, User
 from ..config.settings import MinioBaseUrl
-from ..config.storage import bucket, minio_client
+from ..config.storage import bucket, minio_client, default_url
 
 
 # def users():
@@ -49,6 +49,7 @@ async def test_init_var(test_db, client: AsyncClient):
         email="not_verified@gmail.com",
         password=hash_password("testpassword"),
         verified=False,
+        pic_url=default_url,
         privileges=Privileges.PENDING,
         created_at=datetime.utcnow()
     )
@@ -58,6 +59,7 @@ async def test_init_var(test_db, client: AsyncClient):
         email="visitor@gmail.com",
         password=hash_password("testpassword"),
         verified=True,
+        pic_url=default_url,
         privileges=Privileges.VISITOR,
         created_at=datetime.utcnow()
     )
@@ -67,6 +69,7 @@ async def test_init_var(test_db, client: AsyncClient):
         email="creator@gmail.com",
         password=hash_password("testpassword"),
         verified=True,
+        pic_url=default_url,
         privileges=Privileges.CREATOR,
         created_at=datetime.utcnow()
     )
@@ -76,6 +79,7 @@ async def test_init_var(test_db, client: AsyncClient):
         email="admin@gmail.com",
         password=hash_password("testpassword"),
         verified=True,
+        pic_url=default_url,
         privileges=Privileges.ADMIN,
         created_at=datetime.utcnow()
     )
@@ -128,6 +132,7 @@ async def test_get_user(test_db, client: AsyncClient):
     assert response.json()["username"] == user_admin.username
     assert response.json()["email"] == user_admin.email
     assert response.json()["verified"] == user_admin.verified
+    assert response.json()["pic_url"] == user_admin.pic_url
     assert response.json()["privileges"] == user_admin.privileges
 
     await User.delete_all()
@@ -616,7 +621,56 @@ async def test_user_change_profile_pic(test_db, client: AsyncClient):
 
     await User.delete_all()
 
+"""
+    Profile Picture change
+"""
 
+
+@pytest.mark.anyio
+async def test_user_change_profile_pic(test_db, client: AsyncClient):
+
+    await user_creator.create()
+
+    response = await client.post(
+        "/auth/login",
+        data={
+            "username": user_creator.username,
+            "password": "testpassword"
+        }
+    )
+    assert response.status_code == 200
+
+    # Test JPEG
+    file = "pizza-cat.jpeg"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/"+user_creator.username+"/profile_pic", files=_files
+    )
+    print(response)
+    assert response.status_code == 200
+    assert response.json()["pic_url"] == MinioBaseUrl + \
+        bucket+"/"+user_creator.username+"/thumbnail.jpeg"
+
+    # Test PNG
+    file = "pizza.png"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.put(
+        "/users/"+user_creator.username+"/profile_pic", files=_files
+    )
+    assert response.status_code == 200
+    assert response.json()["pic_url"] == MinioBaseUrl + \
+        bucket+"/"+user_creator.username+"/thumbnail.png"
+
+    response = await client.get("/auth/logout")
+    assert response.status_code == 200
+
+    # Assert user thumbnail is just one
+    list = get_user_media_list(user_creator.username)
+    assert len(list) == 1
+
+    await User.delete_all()
 """
 # Profile picture change
 @pytest.mark.anyio
