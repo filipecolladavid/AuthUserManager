@@ -5,6 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.config.database import startDB
 from src.config.settings import settings
+from src.config.storage import default_url
 from src.utils import hash_password, verify_password
 from ..models.user import User, Privileges
 
@@ -14,12 +15,16 @@ async def test_db():
     await startDB()
     client = AsyncIOMotorClient(settings.DATABASE_URL)
     yield client
-    
+
     # clean up database after test
     await client.drop_database(client.db_name)
 
 
-# Register - During test db has 1 user admin others are removed
+"""
+    Register
+"""
+
+
 @pytest.mark.anyio
 async def test_create_first_user_as_admin(test_db, client: AsyncClient):
 
@@ -36,7 +41,16 @@ async def test_create_first_user_as_admin(test_db, client: AsyncClient):
     assert response.json()["username"] == "admin"
     assert response.json()["email"] == "admin@example.com"
     assert response.json()["verified"] == True
+    assert response.json()["pic_url"] == default_url
     assert response.json()["privileges"] == Privileges.ADMIN
+
+    user = await User.find_one(User.username == "admin")
+    assert user
+    assert user.username == "admin"
+    assert user.email == "admin@example.com"
+    assert user.verified == True
+    assert user.pic_url == default_url
+    assert user.privileges == Privileges.ADMIN
 
 
 @pytest.mark.anyio
@@ -53,7 +67,16 @@ async def test_create_user_init_verified_privilege_status(test_db, client: Async
     assert response.json()["username"] == "user"
     assert response.json()["email"] == "user@example.com"
     assert response.json()["verified"] == False
+    assert response.json()["pic_url"] == default_url
     assert response.json()["privileges"] == Privileges.PENDING
+
+    user = await User.find_one(User.username == "user")
+    assert user
+    assert user.username == "user"
+    assert user.email == "user@example.com"
+    assert user.verified == False
+    assert user.pic_url == default_url
+    assert user.privileges == Privileges.PENDING
 
     user = await User.find_one(User.username == "user")
     await user.delete()
@@ -118,7 +141,11 @@ async def test_create_user_with_existing_username(test_db, client: AsyncClient):
     await user.delete()
 
 
-# Password test
+"""
+    Password Test
+"""
+
+
 def test_verify_password():
     password = "testpassword"
     hashed_password = hash_password(password)
@@ -126,7 +153,11 @@ def test_verify_password():
     assert verify_password("wrongpassword", hashed_password) == False
 
 
-# Login
+"""
+    Login
+"""
+
+
 @pytest.mark.anyio
 async def test_login_with_correct_credentials(test_db, client: AsyncClient):
 
@@ -161,7 +192,6 @@ async def test_login_with_correct_credentials(test_db, client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_login_with_incorrect_password(test_db, client: AsyncClient):
-    # Create a user with incorrect password
     user = User(
         username="testuser",
         email="test@example.com",

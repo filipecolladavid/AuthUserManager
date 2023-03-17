@@ -8,6 +8,8 @@ minio_client = Minio(
     secret_key=settings.MINIO_SECRET_KEY,
     secure=False
 )
+# Default image for new_users
+default_url = "https://upload.wikimedia.org/wikipedia/commons/a/ac/Default_pfp.jpg"
 
 # Using one bucket for media access
 bucket = "media"

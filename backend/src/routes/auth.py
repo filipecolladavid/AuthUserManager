@@ -4,6 +4,7 @@ from fastapi import APIRouter, Form, Response, status, Depends, HTTPException
 from src import oauth2
 from ..models.user import User, UserResponse, Privileges
 from src.utils import ErrorMessage, hash_password, verify_password
+from ..config.storage import default_url
 from src.oauth2 import AuthJWT
 from ..config.settings import settings
 
@@ -14,6 +15,7 @@ REFRESH_TOKEN_EXPIRES_IN = settings.REFRESH_TOKEN_EXPIRES_IN
 
 
 # Register new User - First user get's admin status
+# Default image is assigned for first use
 @router.post(
     '/register',
     status_code=status.HTTP_201_CREATED,
@@ -38,6 +40,7 @@ async def create_user(
             email=email.lower(),
             password=hash_password(password),
             verified=True,
+            pic_url=default_url,
             privileges=Privileges.ADMIN,
             created_at=datetime.utcnow()
         )
@@ -56,6 +59,7 @@ async def create_user(
             email=email.lower(),
             password=hash_password(password),
             verified=False,
+            pic_url=default_url,
             privileges=Privileges.PENDING,
             created_at=datetime.utcnow()
         )
@@ -89,7 +93,7 @@ async def login(response: Response, username: str = Form(...), password: str = F
             status_code=status.HTTP_404_NOT_FOUND,
             detail='User not found'
         )
-    
+
     if not verify_password(password, user.password):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
