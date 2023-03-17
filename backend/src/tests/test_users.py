@@ -322,7 +322,7 @@ async def test_user_privilege_change(test_db, client: AsyncClient):
     await user_admin.create()
     await user_visitor.create()
 
-    await login(user_admin.username, "password", client)
+    await login(user_admin.username, "testpassword", client)
 
     # Pending
     response = await client.patch(
@@ -531,7 +531,7 @@ async def test_admin_change_other_profile_pic(test_db, client: AsyncClient):
     await user_admin.create()
     await user_visitor.create()
 
-    await login(user_admin, "testpassword", client)
+    await login(user_admin.username, "testpassword", client)
 
     # Test JPEG
     file = "pizza-cat.jpeg"
@@ -608,7 +608,7 @@ async def test_not_user_change_profile_pic(test_db, client: AsyncClient):
 async def test_unverified_user_change_profile_pic(test_db, client: AsyncClient):
     await user_not_verified.create()
 
-    await login(user_not_verified, "testpassword", client)
+    await login(user_not_verified.username, "testpassword", client)
 
     file = "pizza-cat.jpeg"
     _files = {'img': open(file, 'rb')}
