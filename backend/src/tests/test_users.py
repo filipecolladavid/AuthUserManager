@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from src.config.database import startDB
 from src.config.settings import settings
 from src.utils import delete_minio, hash_password, get_user_media_list, clear_bucket
+from src.tests.test_utils import login, logout
 from ..models.user import Privileges, User
 from ..config.settings import MinioBaseUrl
 from ..config.storage import bucket, minio_client, default_url
@@ -151,14 +152,7 @@ async def test_delete_self_user(test_db, client: AsyncClient):
     await user_creator.create()
 
     # Not verified
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_not_verified.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_not_verified.username, "testpassword", client)
 
     response = await client.delete("/users/"+user_not_verified.username)
     assert response.status_code == 204
@@ -167,14 +161,7 @@ async def test_delete_self_user(test_db, client: AsyncClient):
     assert not deleted_user
 
     # Verified
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_creator.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_creator.username, "testpassword", client)
 
     response = await client.delete("/users/"+user_creator.username)
     assert response.status_code == 204
@@ -189,21 +176,13 @@ async def test_admin_delete_user(test_db, client: AsyncClient):
     await user_admin.create()
     await user_creator.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_admin.username, "testpassword", client)
 
     response = await client.delete("/users/"+user_creator.username)
     assert response.status_code == 204
     assert not response.text
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -213,39 +192,23 @@ async def test_user_delete_user(test_db, client: AsyncClient):
     await user_creator.create()
     await user_not_verified.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_creator.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_creator.username, "testpassword", client)
 
     response = await client.delete("/users/"+user_not_verified.username)
     assert response.status_code == 401
     assert response.json()[
         "detail"] == "Need admin privilege to delete another user"
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_not_verified.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_not_verified.username, "testpassword", client)
 
     response = await client.delete("/users/"+user_creator.username)
     assert response.status_code == 401
     assert response.json()[
         "detail"] == "Need admin privilege to delete another user"
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -254,14 +217,7 @@ async def test_user_delete_user(test_db, client: AsyncClient):
 async def test_delete_non_existing_user(test_db, client: AsyncClient):
     await user_admin.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_admin.username, "testpassword", client)
 
     user = await User.find_one(User.username == "johnDoe")
     assert not user
@@ -270,8 +226,7 @@ async def test_delete_non_existing_user(test_db, client: AsyncClient):
     assert response.status_code == 404
     assert response.json()["detail"] == "User not found"
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -286,14 +241,7 @@ async def test_user_verify(test_db, client: AsyncClient):
     await user_admin.create()
     await user_not_verified.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_admin.username, "testpassword", client)
 
     response = await client.patch(
         "/users/"+user_not_verified.username+"/verify",
@@ -302,8 +250,7 @@ async def test_user_verify(test_db, client: AsyncClient):
     user = await User.find_one(User.username == user_not_verified.username)
     assert user.verified
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -314,21 +261,13 @@ async def test_already_verified_user(test_db, client: AsyncClient):
     await user_admin.create()
     await user_visitor.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_admin.username, "testpassword", client)
 
     response = await client.patch("/users/"+user_visitor.username+"/verify")
     assert response.status_code == 400
     assert response.json()["detail"] == "User is already verified"
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -338,14 +277,7 @@ async def test_non_admin_verify(test_db, client: AsyncClient):
     await user_creator.create()
     await user_not_verified.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_creator.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_creator.username, "testpassword", client)
 
     # User tries to verify himself
     response = await client.patch("/users/"+user_creator.username+"/verify")
@@ -357,8 +289,7 @@ async def test_non_admin_verify(test_db, client: AsyncClient):
     assert response.status_code == 401
     assert response.json()["detail"] == "This action requires admin privileges"
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -367,14 +298,7 @@ async def test_non_admin_verify(test_db, client: AsyncClient):
 async def test_verify_not_user(test_db, client: AsyncClient):
     await user_admin.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_admin.username, "testpassword", client)
 
     user = await User.find_one(User.username == "johnDoe")
     assert not user
@@ -383,8 +307,7 @@ async def test_verify_not_user(test_db, client: AsyncClient):
     assert response.status_code == 404
     assert response.json()["detail"] == "User not found"
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -399,14 +322,7 @@ async def test_user_privilege_change(test_db, client: AsyncClient):
     await user_admin.create()
     await user_visitor.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_admin.username, "password", client)
 
     # Pending
     response = await client.patch(
@@ -444,8 +360,7 @@ async def test_user_privilege_change(test_db, client: AsyncClient):
     assert response.json()["privileges"] == user.privileges
     assert user.privileges == Privileges.ADMIN
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -455,14 +370,7 @@ async def test_invalid_privilege(test_db, client: AsyncClient):
     await user_admin.create()
     await user_visitor.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_admin.username, "testpassword", client)
 
     response = await client.patch("/users/"+user_visitor.username+"/privileges/invalid")
     assert response.status_code == 400
@@ -471,8 +379,7 @@ async def test_invalid_privilege(test_db, client: AsyncClient):
     user = await User.find_one(User.username == user_visitor.username)
     assert user.privileges == user_visitor.privileges
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -481,14 +388,7 @@ async def test_invalid_privilege(test_db, client: AsyncClient):
 async def test_privilege_not_user(test_db, client: AsyncClient):
     await user_admin.create()
 
-    response = await client.post(
-        "auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    response.status_code == 200
+    await login(user_admin.username, "testpassword", client)
 
     user = await User.find_one(User.username == "johnDoe")
     assert not user
@@ -497,8 +397,7 @@ async def test_privilege_not_user(test_db, client: AsyncClient):
     response.status_code == 404
     response.json()["detail"] == "User not found"
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -508,14 +407,7 @@ async def test_privilege_unverified_user(test_db, client: AsyncClient):
     await user_admin.create()
     await user_not_verified.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_admin.username, "testpassword", client)
 
     user = await User.find_one(User.username == user_not_verified.username)
     assert not user.verified
@@ -526,8 +418,7 @@ async def test_privilege_unverified_user(test_db, client: AsyncClient):
     assert response.status_code == 400
     assert response.json()["detail"] == "User not verified"
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -537,14 +428,7 @@ async def test_unauthorized_privilege_change(test_db, client: AsyncClient):
     await user_creator.create()
     await user_visitor.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_creator.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_creator.username, "testpassword", client)
 
     # User changes privilege on itself
     response = await client.patch("/users/"+user_creator.username+"/privileges/admin")
@@ -558,8 +442,7 @@ async def test_unauthorized_privilege_change(test_db, client: AsyncClient):
     assert response.status_code == 401
     assert response.json()["detail"] == "This action requires admin privileges"
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
@@ -568,14 +451,7 @@ async def test_unauthorized_privilege_change(test_db, client: AsyncClient):
 async def test_user_change_profile_pic(test_db, client: AsyncClient):
     await user_visitor.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_visitor.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
+    await login(user_visitor.username, "testpassword", client)
 
     # Test JPEG
     file = "pizza-cat.jpeg"
@@ -600,8 +476,7 @@ async def test_user_change_profile_pic(test_db, client: AsyncClient):
     assert response.json()["pic_url"] == MinioBaseUrl + \
         bucket+"/"+user_visitor.username+"/thumbnail.png"
 
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await logout(client)
 
     await User.delete_all()
 
