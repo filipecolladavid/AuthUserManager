@@ -220,7 +220,6 @@ async def change_profile_picture(username: str, img: UploadFile, user_id: str = 
         )
 
     if(user.pic_url != default_url):
-        print("deleted")
         delete_minio(user.pic_url)
     user.pic_url = add_minio(img=img, user=user, item=None)
 

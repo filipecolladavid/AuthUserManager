@@ -32,7 +32,13 @@ def hash_password(password: str):
 def verify_password(password: str, hashed_password: str):
     return pwd_context.verify(password, hashed_password)
 
-
+"""
+    Minio file_structure:
+        - Files are either jpg or png
+        - Each user get's a folder with it's name on creation of content (profile_pic or item)
+        bucket/username/thumbnail.jpg (for profile picture)
+        bucket/username/item_id.jpg
+"""
 # Add img to minio
 def add_minio(img, user, item):
 
@@ -71,6 +77,7 @@ def delete_user_media(username: str):
     objects_to_delete = minio_client.list_objects(
         bucket, prefix=username, recursive=True)
     for obj in objects_to_delete:
+        print(obj.object_name)
         minio_client.remove_object(bucket, obj.object_name)
 
 
@@ -108,6 +115,7 @@ def clear_bucket():
     objects = minio_client.list_objects(bucket, recursive=True)
     for obj in objects:
         delete_minio(file_name=obj.object_name)
+        print(obj.object_name)
 
     objects = minio_client.list_objects(bucket, recursive=True)
 

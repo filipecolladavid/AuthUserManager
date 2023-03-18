@@ -5,11 +5,13 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.config.database import startDB
 from src.config.settings import settings
-from src.utils import delete_minio, hash_password, get_user_media_list, clear_bucket
+from src.utils import delete_minio, hash_password, get_user_media_list, clear_bucket, delete_user_media
 from src.tests.test_utils import login, logout
 from ..models.user import Privileges, User
 from ..config.settings import MinioBaseUrl
 from ..config.storage import bucket, minio_client, default_url
+
+# Bucket must be clear
 
 
 @pytest.fixture(scope='module')
@@ -143,6 +145,8 @@ async def test_get_non_existing_user(test_db, client: AsyncClient):
 """
     Delete users
 """
+
+# TODO - assert deletes all posts
 
 
 @pytest.mark.anyio
@@ -447,39 +451,6 @@ async def test_unauthorized_privilege_change(test_db, client: AsyncClient):
     await User.delete_all()
 
 
-@pytest.mark.anyio
-async def test_user_change_profile_pic(test_db, client: AsyncClient):
-    await user_visitor.create()
-
-    await login(user_visitor.username, "testpassword", client)
-
-    # Test JPEG
-    file = "pizza-cat.jpeg"
-    _files = {'img': open(file, 'rb')}
-
-    response = await client.put(
-        "/users/"+user_visitor.username+"/profile_pic", files=_files
-    )
-    print(response)
-    assert response.status_code == 200
-    assert response.json()["pic_url"] == MinioBaseUrl + \
-        bucket+"/"+user_visitor.username+"/thumbnail.jpeg"
-
-    # Test PNG
-    file = "pizza.png"
-    _files = {'img': open(file, 'rb')}
-
-    response = await client.put(
-        "/users/"+user_visitor.username+"/profile_pic", files=_files
-    )
-    assert response.status_code == 200
-    assert response.json()["pic_url"] == MinioBaseUrl + \
-        bucket+"/"+user_visitor.username+"/thumbnail.png"
-
-    await logout(client)
-
-    await User.delete_all()
-
 """
     Profile Picture change
 """
@@ -499,10 +470,15 @@ async def test_user_change_profile_pic(test_db, client: AsyncClient):
     response = await client.put(
         "/users/"+user_creator.username+"/profile_pic", files=_files
     )
-    print(response)
     assert response.status_code == 200
+
     assert response.json()["pic_url"] == MinioBaseUrl + \
         bucket+"/"+user_creator.username+"/thumbnail.jpeg"
+
+    # Assert, after insertion, user thumbnail is just one
+    list = get_user_media_list(user_creator.username)
+    assert len(list) == 1
+    assert list[0] == user_creator.username+"/thumbnail.jpeg"
 
     # Test PNG
     file = "pizza.png"
@@ -518,10 +494,11 @@ async def test_user_change_profile_pic(test_db, client: AsyncClient):
     # Assert, after insertion, user thumbnail is just one
     list = get_user_media_list(user_creator.username)
     assert len(list) == 1
+    assert list[0] == user_creator.username+"/thumbnail.png"
 
     await logout(client)
 
-    clear_bucket()
+    delete_user_media(user_creator.username)
 
     await User.delete_all()
 
@@ -548,10 +525,11 @@ async def test_admin_change_other_profile_pic(test_db, client: AsyncClient):
     # Assert, after insertion, user thumbnail is just one
     list = get_user_media_list(user_visitor.username)
     assert len(list) == 1
+    assert list[0] == user_visitor.username+"/thumbnail.jpeg"
 
     await logout(client)
 
-    clear_bucket()
+    delete_user_media(user_visitor.username)
 
     await User.delete_all()
 
@@ -573,7 +551,11 @@ async def test_incorrect_type_profile_pic(test_db, client: AsyncClient):
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid type of file"
     user = await User.find_one(User.username == user_creator.username)
+
     assert user.pic_url == default_url
+
+    list = get_user_media_list(user_creator.username)
+    assert len(list) == 0
 
     await logout(client)
 
@@ -594,10 +576,11 @@ async def test_not_user_change_profile_pic(test_db, client: AsyncClient):
         "/users/non_existing_username/profile_pic", files=_files
     )
 
-    assert response.status_code == 404
-    assert response.json()["detail"] == "User not found"
     user = await User.find_one(User.username == "non_existing_username")
     assert not user
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"
 
     await logout(client)
 
@@ -616,11 +599,14 @@ async def test_unverified_user_change_profile_pic(test_db, client: AsyncClient):
     response = await client.put(
         "/users/"+user_not_verified.username+"/profile_pic", files=_files
     )
+    user = await User.find_one(User.username == user_not_verified.username)
+    assert user.pic_url == default_url
 
     assert response.status_code == 401
     assert response.json()["detail"] == "You're not verified"
-    user = await User.find_one(User.username == user_not_verified.username)
-    assert user.pic_url == default_url
+
+    list = get_user_media_list(user_not_verified.username)
+    assert len(list) == 0
 
     await logout(client)
 
@@ -647,6 +633,9 @@ async def test_non_admin_change_other_profile_pic(test_db, client: AsyncClient):
 
     user = await User.find_one(User.username == user_visitor.username)
     assert user.pic_url == default_url
+
+    list = get_user_media_list(user_visitor.username)
+    assert len(list) == 0
 
     await logout(client)
 
