@@ -154,7 +154,6 @@ async def create_item(
     })
 async def update_item(
         item_id: str,
-        img: Optional[UploadFile] = None,
         title: str = Form(...),
         desc: str = Form(...),
         visibility: str = Form(...),
@@ -203,13 +202,6 @@ async def update_item(
 
     await item.save()
 
-    if img:
-        pic_url = add_minio(img=img, user=user, item=item)
-        print("pic_url: "+pic_url)
-        if pic_url != item.pic_url:
-            delete_minio(url=item.pic_url)
-        item.pic_url = pic_url
-
     return await item.save()
 
 
@@ -231,7 +223,7 @@ async def delete_item(item_id=str, user_id: str = Depends(oauth2.require_user)):
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post does not exist anymore"
+            detail="Post not found"
         )
 
     if user.username != item.author and user.privileges < Privileges.ADMIN:
