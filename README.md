@@ -54,8 +54,3 @@ or
 ```
 for a more detailed view of each individual test
 
-## Roadmap
-
-- Add endpoints to retreive users it's own posts
-- Improve MinIO storage organization
-
