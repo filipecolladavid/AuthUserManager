@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, status, HTTPException
 from minio import InvalidResponseError
-from src.models.items import Item
+from src.models.items import Item, Visibility
 from src.utils import ErrorMessage, add_minio, delete_minio, delete_user_media
 
 from src.config.storage import default_url
@@ -78,9 +78,9 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Need admin privilege to delete another user",
         )
-    
+
     await Item.find(Item.author == user.username).delete()
-    
+
     delete_user_media(user.username)
 
     await user.delete()
@@ -88,7 +88,42 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
     return {}
 
 
+@router.get(
+    '/{username}/posts',
+    response_model=List[Item],
+)
+async def get_users_posts(username: str, user_id: str = Depends(oauth2.require_id)):
+
+    if not user_id:
+        all_items_cursor = Item.find(Item.visibility <= Visibility.ALL)
+
+    else:
+        user = await User.get(user_id)
+
+        if user.username == username:
+            all_items_cursor = Item.find(Item.username == user.username)
+
+        if user.privileges <= Privileges.PENDING:
+            all_items_cursor = Item.find(
+                {"$and": [{"visibility": {"$lte": Visibility.ALL}},
+                         {"author": user.username}]}
+            )
+        if user.privileges >= Privileges.VISITOR:
+            all_items_cursor = Item.find(
+                {"$and": [{"visibility": {"$lte": Visibility.USERS}},
+                         {"author": user.username}]}
+            )
+        if user.privileges >= Privileges.ADMIN:
+            all_items_cursor = Item.find(
+                {"$and": [{"visibility": {"$lte": Visibility.ADMIN}},
+                         {"author": user.username}]}
+            )
+
+    return await all_items_cursor.to_list()
+
 # Verify user - requires admin (3) privilege
+
+
 @router.patch(
     '/{username}/verify',
     response_model=UserResponse,

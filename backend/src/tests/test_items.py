@@ -8,7 +8,7 @@ from src.config.database import startDB
 from src.config.settings import MinioBaseUrl, settings
 from src.config.storage import bucket, minio_client
 from src.models.items import Item, Visibility
-from src.utils import hash_password, verify_password, delete_minio
+from src.utils import hash_password, verify_password, delete_minio, get_user_media_list, delete_user_media
 from src.tests.test_utils import login, logout
 from ..models.user import User, Privileges
 
@@ -170,6 +170,185 @@ async def test_get_items_admins(test_db, client: AsyncClient):
 
     await logout(client)
 
+    await User.delete_all()
+
+
+@pytest.mark.anyio
+async def test_user_gets_own_item(test_db, client: AsyncClient):
+    # User should always get his post regardless of his privilege
+    await user_visitor.create()
+    item_test = Item(
+        title="A post",
+        desc="A post",
+        visibility=Visibility.ALL,
+        author=user_visitor.username,
+        pic_url="http://0.0.0.0:9000/media/admin/invalid_2.png",
+        created_at=datetime.utcnow()
+    )
+    item = await item_test.create()
+
+    await login(user_visitor.username, "testpassword", client)
+
+    response = await client.get("/items/"+str(item.id))
+    print(response.json())
+    assert response.status_code == 200
+    assert response.json()["title"] == "A post"
+    assert response.json()["desc"] == "A post"
+    assert response.json()["visibility"] == Visibility.ALL
+
+    item.visibility = Visibility.USERS
+    await item.save()
+
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+    assert response.json()["title"] == "A post"
+    assert response.json()["desc"] == "A post"
+    assert response.json()["visibility"] == Visibility.USERS
+
+    await item.delete()
+
+    item.visibility = Visibility.ADMIN
+    await item.save()
+
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+    assert response.json()["title"] == "A post"
+    assert response.json()["desc"] == "A post"
+    assert response.json()["visibility"] == Visibility.ADMIN
+
+    await logout(client)
+    await Item.delete_all()
+    await User.delete_all()
+
+
+@pytest.mark.anyio
+async def test_get_other_user_post(test_db, client: AsyncClient):
+
+    await user_not_verified.create()
+    await user_visitor.create()
+    await user_creator.create()
+    await user_admin.create()
+
+    item_test = Item(
+        title="A post",
+        desc="A post",
+        visibility=Visibility.ALL,
+        author="SomeOtherUser",
+        pic_url="http://0.0.0.0:9000/media/admin/invalid_2.png",
+        created_at=datetime.utcnow()
+    )
+    """
+    
+        Visibility ALL
+    
+    """
+    item = await item_test.create()
+
+    # Not logged in
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+
+    # Not verified
+    await login(user_not_verified.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+    await logout(client)
+
+    # Visitor
+    await login(user_visitor.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+    await logout(client)
+
+    # Creator
+    await login(user_creator.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+    await logout(client)
+
+    # Admin
+    await login(user_admin.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+    await logout(client)
+
+    """
+    
+        Visibility Users
+    
+    """
+    item.visibility = Visibility.USERS
+    await item.save()
+
+    # Not logged in
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authorized to see this post"
+
+    # Not verified
+    await login(user_not_verified.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authorized to see this post"
+    await logout(client)
+
+    # Visitor
+    await login(user_visitor.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+    await logout(client)
+
+    # Creator
+    await login(user_creator.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+    await logout(client)
+
+    # Admin
+    await login(user_admin.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+    await logout(client)
+
+    """
+        Visibility ADMIN
+    """
+    item.visibility = Visibility.ADMIN
+    await item.save()
+    
+    # Not logged in
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authorized to see this post"
+
+    # Not verified
+    await login(user_not_verified.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authorized to see this post"
+    await logout(client)
+
+    # Visitor
+    await login(user_visitor.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authorized to see this post"
+    await logout(client)
+
+    # Creator
+    await login(user_creator.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authorized to see this post"
+    await logout(client)
+
+    # Admin
+    await login(user_admin.username, "testpassword", client)
+    response = await client.get("/items/"+str(item.id))
+    assert response.status_code == 200
+    await logout(client)
+
+    await Item.delete_all()
     await User.delete_all()
 
 
@@ -382,7 +561,8 @@ async def test_create_item_unauthorized(test_db, client: AsyncClient):
     assert len(db_item) == 0
 
     assert response.status_code == 401
-    assert response.json()["detail"] == "You need to be a creator to create a post"
+    assert response.json()[
+        "detail"] == "You need to be a creator to create a post"
 
     await logout(client)
 
@@ -390,110 +570,40 @@ async def test_create_item_unauthorized(test_db, client: AsyncClient):
 
 
 """
-
-@pytest.mark.anyio
-async def test_create_item_unauthorized(test_db, client: AsyncClient):
-
-        # Not logged in
-
-    file = "pizza-cat.jpeg"
-    _files = {'img': open(file, 'rb')}
-
-    response = await client.post(
-        "/items/",
-        files=_files,
-        data={
-            "title": "A title for a picture",
-            "desc": "A desc for a picture",
-            "visibility": "all"
-        }
-    )
-
-    assert response.status_code == 401
-    assert response.json()["detail"] == "You are not logged in"
-
-        # Not verified
-
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_not_verified.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
-
-    file = "pizza-cat.jpeg"
-    _files = {'img': open(file, 'rb')}
-
-    response = await client.post(
-        "/items/",
-        files=_files,
-        data={
-            "title": "A title for a picture",
-            "desc": "A desc for a picture",
-            "visibility": "all"
-        }
-    )
-
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Please verify your account"
-
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
-
-        # Not a creator
-
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_visitor.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
-
-    file = "pizza-cat.jpeg"
-    _files = {'img': open(file, 'rb')}
-
-    response = await client.post(
-        "/items/",
-        files=_files,
-        data={
-            "title": "A title for a picture",
-            "desc": "A desc for a picture",
-            "visibility": "all"
-        }
-    )
-
-    assert response.status_code == 401
-    assert response.json()[
-        "detail"] == "You need to be a creator to create a post"
+    Update item
+"""
 
 
-# Update
 @pytest.mark.anyio
 async def test_update_item(test_db, client: AsyncClient):
 
-    user = await User.find_one(User.username == user_admin.username)
-
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
-
-        # Update all fields
+    await user_creator.create()
+    await login(user_creator.username, "testpassword", client)
 
     file = "pizza.png"
     _files = {'img': open(file, 'rb')}
 
-    item = await Item.find_one(Item.title == item_all.title)
-    item_id = str(item.id)
+    # Default visibility - all
+    response = await client.post(
+        "/items/",
+        files=_files,
+        data={
+            "title": "A title for a picture",
+            "desc": "A desc for a picture",
+        }
+    )
+    assert response.status_code == 200
+    item_id = response.json()["_id"]
+    minio_items = get_user_media_list(user_creator.username)
 
+    contains = False
+    for item in minio_items:
+        if item == user_creator.username+"/"+item_id+".png":
+            contains = True
+
+    assert contains
+
+    # Update all fields - picture can't be changed (all fields are required)
     response = await client.put(
         "/items/"+item_id,
         files=_files,
@@ -503,105 +613,88 @@ async def test_update_item(test_db, client: AsyncClient):
             "visibility": "users",
         }
     )
-
     assert response.status_code == 200
+
+    assert response.json()["_id"] == item_id
     assert response.json()["title"] == "Changed title"
     assert response.json()["desc"] == "Changed desc"
     assert response.json()["visibility"] == Visibility.USERS
-    assert response.json()["author"] == user.username
+    assert response.json()["author"] == user_creator.username
     assert response.json()["pic_url"] == MinioBaseUrl + \
-        bucket+"/"+user_admin.username+"/"+item_id+".png"
+        bucket+"/"+user_creator.username+"/"+item_id+".png"
 
-    #    Update just Title, Desc and Visibility
+    minio_items = get_user_media_list(user_creator.username)
+    contains = False
+    for item in minio_items:
+        if item == user_creator.username+"/"+item_id+".png":
+            contains = True
 
-    item = await Item.find_one(Item.title == "Changed title")
-    item_id = str(item.id)
+    assert contains
 
-    response = await client.put(
-        "/items/"+item_id,
-        data={
-            "title": "Changed title2",
-            "desc": "Changed desc1",
-            "visibility": "all"
-        }
-    )
+    await logout(client)
 
-    assert response.status_code == 200
-    assert response.json()["title"] == "Changed title2"
-    assert response.json()["desc"] == "Changed desc1"
-    assert response.json()["visibility"] == Visibility.ALL
-    assert response.json()["author"] == user.username
-    assert response.json()["pic_url"] == MinioBaseUrl + \
-        bucket+"/"+user_admin.username+"/"+item_id+".png"
+    delete_user_media(user_creator.username)
 
-    revert_item = Item(
-        id=item.id,
-        title="A post for all",
-        desc="A post for all",
-        visibility=Visibility.ALL,
-        author=user_admin.username,
-        pic_url="http://0.0.0.0:9000/media/admin/invalid.png",
-        created_at=datetime.utcnow()
-    )
-    await revert_item.save()
-
-    response = await client.get("/auth/logout")
-    assert response.status_code == 200
+    await User.delete_all()
+    await Item.delete_all()
 
 
 @pytest.mark.anyio
 async def test_admin_update_other_user(test_db, client: AsyncClient):
-    item = Item(
-        title="Other user post",
-        desc="Other user post",
-        visibility=Visibility.ALL,
-        author=user_creator.username,
-        pic_url="http://0.0.0.0:9000/media/admin/invalid_3.png",
-        created_at=datetime.utcnow()
-    )
-    await item.create()
+    await user_creator.create()
+    await login(user_creator.username, "testpassword", client)
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_admin.username,
-            "password": "testpassword"
-        }
-    )
-    assert response.status_code == 200
-
-    file = "pizza-cat.jpeg"
+    file = "pizza.png"
     _files = {'img': open(file, 'rb')}
 
-    response = await client.put(
-        "/items/"+str(item.id),
+    response = await client.post(
+        "/items/",
         files=_files,
         data={
-            "title": "Admin changed this post",
-            "desc": "Admin changed this post",
-            "visibility": "users"
+            "title": "A title for a picture",
+            "desc": "A desc for a picture",
         }
     )
-
     assert response.status_code == 200
-    assert response.json()["title"] == "Admin changed this post"
-    assert response.json()["desc"] == "Admin changed this post"
-    assert response.json()["visibility"] == Visibility.USERS
+    item_id = response.json()["_id"]
 
-    item_all = Item(
-        id=item.id,
-        title="A post for all",
-        desc="A post for all",
-        visibility=Visibility.ALL,
-        author=user_admin.username,
-        pic_url="http://0.0.0.0:9000/media/admin/invalid.png",
-        created_at=datetime.utcnow()
+    await user_admin.create()
+    await login(user_creator.username, "testpassword", client)
+
+    response = await client.put(
+        "/items/"+item_id,
+        data={
+            "title": "Changed title",
+            "desc": "Changed desc",
+            "visibility": "admin"
+        }
     )
-    await item_all.save()
-    response = await client.get("/auth/logout")
     assert response.status_code == 200
+    assert response.json()["_id"] == item_id
+    assert response.json()["title"] == "Changed title"
+    assert response.json()["desc"] == "Changed desc"
+    assert response.json()["visibility"] == Visibility.ADMIN
+
+    minio_items = get_user_media_list(user_creator.username)
+    contains = False
+    for item in minio_items:
+        if item == user_creator.username+"/"+item_id+".png":
+            contains = True
+    assert contains
+
+    delete_user_media(user_creator.username)
+
+    await logout(client)
+
+    await Item.delete_all()
+    await User.delete_all()
 
 
+# @pytest.mark.anyio
+# async def test_update_invalid_parameter(test_db, client: AsyncClient):
+
+
+"""
 @pytest.mark.anyio
 async def test_update_invalid_parameter(test_db, client: AsyncClient):
     response = await client.post(
@@ -809,13 +902,6 @@ async def test_user_delete_other_post(test_db, client: AsyncClient):
     )
     item = await custom_item.create()
 
-    response = await client.post(
-        "/auth/login",
-        data={
-            "username": user_visitor.username,
-            "password": "testpassword"
-        }
-    )
     assert response.status_code == 200
     item_id = str(item.id)
     response = await client.delete("/items/"+item_id)
@@ -854,5 +940,5 @@ async def test_user_delete_non_existing_post(test_db, client: AsyncClient):
 
     response = await client.delete("/items/"+item_id)
     assert response.status_code == 404
-    assert response.json()["detail"] == "Post does not exist anymore"
+    assert response.json()["detail"] == "Post does not exist anymore
 """

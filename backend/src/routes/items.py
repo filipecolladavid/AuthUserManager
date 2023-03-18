@@ -12,11 +12,9 @@ from .. import oauth2
 
 router = APIRouter()
 
-# TODO - get users items
 
 # Returns posts filtered by who's making the request
-
-
+# TODO - add test to check if user gets it's posts
 @router.get('/', response_model=List[Item])
 async def get_all(user_id: str = Depends(oauth2.require_id)):
     if not user_id:
@@ -25,13 +23,66 @@ async def get_all(user_id: str = Depends(oauth2.require_id)):
     else:
         user = await User.get(user_id)
         if user.privileges <= Privileges.PENDING:
-            all_items_cursor = Item.find(Item.visibility <= Visibility.ALL)
+            all_items_cursor = Item.find(
+                {"$or": [{"visibility": {"$lte": Visibility.ALL}},
+                         {"author": user.username}]}
+            )
         if user.privileges >= Privileges.VISITOR:
-            all_items_cursor = Item.find(Item.visibility <= Visibility.USERS)
+            all_items_cursor = Item.find(
+                {"$or": [{"visibility": {"$lte": Visibility.USERS}},
+                         {"author": user.username}]}
+            )
         if user.privileges >= Privileges.ADMIN:
-            all_items_cursor = Item.find(Item.visibility <= Visibility.ADMIN)
+            all_items_cursor = Item.find(
+                {"$or": [{"visibility": {"$lte": Visibility.ADMIN}},
+                         {"author": user.username}]}
+            )
 
     return await all_items_cursor.to_list()
+
+
+@router.get(
+    '/{item_id}',
+    response_model=Item,
+    responses={
+        401: {"model": ErrorMessage, "description": "Unauthorized"},
+        404: {"model": ErrorMessage, "description": "Post not found"}
+    }
+)
+async def get_item(item_id: str, user_id: str = Depends(oauth2.require_id)):
+    item = await Item.get(item_id)
+    print(item)
+
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail="Post not found"
+        )
+
+    if not user_id and item.visibility != Visibility.ALL:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authorized to see this post"
+        )
+    if not user_id and item.visibility == Visibility.ALL:
+        return item
+
+    req_user = await User.get(user_id)
+
+    if req_user.username == item.author:
+        return item
+
+    if req_user.privileges <= Privileges.PENDING and item.visibility > Visibility.ALL:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authorized to see this post"
+        )
+    if req_user.privileges <= Privileges.CREATOR and item.visibility > Visibility.USERS:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authorized to see this post"
+        )
+    return item
 
 
 # Create an Item - requires creator privilege
