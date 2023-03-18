@@ -144,16 +144,34 @@ async def test_get_items_non_users(test_db, client: AsyncClient):
 @pytest.mark.anyio
 async def test_get_items_users(test_db, client: AsyncClient):
     await user_visitor.create()
+
+    item_test_admins = Item(
+        title="A post for admins by visitor",
+        desc="A post for admins by visitor",
+        visibility=Visibility.ADMIN,
+        author=user_visitor.username,
+        pic_url="http://0.0.0.0:9000/media/admin/invalid_2.png",
+        created_at=datetime.utcnow()
+    )
+
+    await item_test_admins.create()
+
     await login(user_visitor.username, "testpassword", client)
 
     response = await client.get("/items/")
-    db_items = await Item.find(Item.visibility <= Visibility.USERS).to_list()
+    db_items = await Item.find({"$or": [{"visibility": {"$lte": Visibility.USERS}},
+                                        {"author": user_visitor.username}]}).to_list()
     assert response.status_code == 200
     assert len(response.json()) == len(db_items)
-    assert not has_visibility_greater_than(response.json(), Visibility.USERS)
+    items = response.json()
 
+    for item in items:
+        if item["visibility"] >= Visibility.ADMIN and item["author"] != user_visitor.username:
+            assert False
+    
     await logout(client)
 
+    await item_test_admins.delete()
     await User.delete_all()
 
 
@@ -315,7 +333,7 @@ async def test_get_other_user_post(test_db, client: AsyncClient):
     """
     item.visibility = Visibility.ADMIN
     await item.save()
-    
+
     # Not logged in
     response = await client.get("/items/"+str(item.id))
     assert response.status_code == 401

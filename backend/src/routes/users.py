@@ -106,24 +106,23 @@ async def get_users_posts(username: str, user_id: str = Depends(oauth2.require_i
         if user.privileges <= Privileges.PENDING:
             all_items_cursor = Item.find(
                 {"$and": [{"visibility": {"$lte": Visibility.ALL}},
-                         {"author": user.username}]}
+                          {"author": user.username}]}
             )
         if user.privileges >= Privileges.VISITOR:
             all_items_cursor = Item.find(
                 {"$and": [{"visibility": {"$lte": Visibility.USERS}},
-                         {"author": user.username}]}
+                          {"author": user.username}]}
             )
         if user.privileges >= Privileges.ADMIN:
             all_items_cursor = Item.find(
                 {"$and": [{"visibility": {"$lte": Visibility.ADMIN}},
-                         {"author": user.username}]}
+                          {"author": user.username}]}
             )
 
     return await all_items_cursor.to_list()
 
+
 # Verify user - requires admin (3) privilege
-
-
 @router.patch(
     '/{username}/verify',
     response_model=UserResponse,
