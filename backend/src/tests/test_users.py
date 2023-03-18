@@ -5,6 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.config.database import startDB
 from src.config.settings import settings
+from src.models.items import Item
 from src.utils import delete_minio, hash_password, get_user_media_list, clear_bucket, delete_user_media
 from src.tests.test_utils import login, logout
 from ..models.user import Privileges, User
@@ -189,8 +190,12 @@ async def test_delete_self_user(test_db, client: AsyncClient):
     assert response.status_code == 200
 
     response = await client.delete("/users/"+user_creator.username)
+
     assert response.status_code == 204
     assert not response.text
+
+    items = await Item.find(Item.author == user_creator.username).to_list()
+    assert len(items) == 0
 
     list = get_user_media_list(user_creator.username)
     assert len(list) == 0

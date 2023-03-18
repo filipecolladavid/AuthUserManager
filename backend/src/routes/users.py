@@ -1,6 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, status, HTTPException
 from minio import InvalidResponseError
+from src.models.items import Item
 from src.utils import ErrorMessage, add_minio, delete_minio, delete_user_media
 
 from src.config.storage import default_url
@@ -78,8 +79,10 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
             detail="Need admin privilege to delete another user",
         )
     
-    delete_user_media(user.username)
+    await Item.find(Item.author == user.username).delete()
     
+    delete_user_media(user.username)
+
     await user.delete()
 
     return {}
