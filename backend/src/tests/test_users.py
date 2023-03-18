@@ -329,7 +329,7 @@ async def test_get_users_posts(test_db, client: AsyncClient):
     list = response.json()
     assert len(list) == 1
 
-    for item in list: 
+    for item in list:
         if item["visibility"] > Visibility.USERS:
             assert False
 
@@ -342,6 +342,11 @@ async def test_get_users_posts(test_db, client: AsyncClient):
     for item in list:
         if item["visibility"] > Visibility.USERS:
             assert item["author"] == user_visitor.username
+
+    await logout(client)
+    await User.delete_all()
+    await Item.delete_all()
+
 
 """
     Verify
