@@ -146,8 +146,6 @@ async def test_get_non_existing_user(test_db, client: AsyncClient):
     Delete users
 """
 
-# TODO - assert deletes all posts
-
 
 @pytest.mark.anyio
 async def test_delete_self_user(test_db, client: AsyncClient):
@@ -155,7 +153,7 @@ async def test_delete_self_user(test_db, client: AsyncClient):
     await user_not_verified.create()
     await user_creator.create()
 
-    # Not verified
+    # Not verified - can't create posts
     await login(user_not_verified.username, "testpassword", client)
 
     response = await client.delete("/users/"+user_not_verified.username)
@@ -167,12 +165,38 @@ async def test_delete_self_user(test_db, client: AsyncClient):
     # Verified
     await login(user_creator.username, "testpassword", client)
 
+    file = "pizza-cat.jpeg"
+    _files = {'img': open(file, 'rb')}
+
+    response = await client.post(
+        "/items/",
+        files=_files,
+        data={
+            "title": "A title for a picture",
+            "desc": "A desc for a picture",
+        }
+    )
+    assert response.status_code == 200
+
+    response = await client.post(
+        "/items/",
+        files=_files,
+        data={
+            "title": "A title for a picture",
+            "desc": "A desc for a picture",
+        }
+    )
+    assert response.status_code == 200
+
     response = await client.delete("/users/"+user_creator.username)
     assert response.status_code == 204
     assert not response.text
+
+    list = get_user_media_list(user_creator.username)
+    assert len(list) == 0
+
     deleted_user = await User.find_one(User.username == user_creator.username)
     assert not deleted_user
-    assert len(await User.find_many().to_list()) == 0
 
 
 @pytest.mark.anyio

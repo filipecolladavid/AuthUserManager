@@ -77,17 +77,10 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Need admin privilege to delete another user",
         )
-
-    pic_url = user.pic_url
+    
+    delete_user_media(user.username)
+    
     await user.delete()
-    if pic_url != default_url:
-        try:
-            delete_user_media(user.username)
-        except InvalidResponseError as err:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=err.message
-            )
 
     return {}
 
@@ -219,7 +212,7 @@ async def change_profile_picture(username: str, img: UploadFile, user_id: str = 
             detail="Need admin privilege to change another's user profile picture",
         )
 
-    if(user.pic_url != default_url):
+    if (user.pic_url != default_url):
         delete_minio(user.pic_url)
     user.pic_url = add_minio(img=img, user=user, item=None)
 

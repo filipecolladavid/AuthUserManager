@@ -32,6 +32,7 @@ def hash_password(password: str):
 def verify_password(password: str, hashed_password: str):
     return pwd_context.verify(password, hashed_password)
 
+
 """
     Minio file_structure:
         - Files are either jpg or png
@@ -40,6 +41,8 @@ def verify_password(password: str, hashed_password: str):
         bucket/username/item_id.jpg
 """
 # Add img to minio
+
+
 def add_minio(img, user, item):
 
     if img.content_type not in Allowed_types:
@@ -77,8 +80,10 @@ def delete_user_media(username: str):
     objects_to_delete = minio_client.list_objects(
         bucket, prefix=username, recursive=True)
     for obj in objects_to_delete:
-        print(obj.object_name)
-        minio_client.remove_object(bucket, obj.object_name)
+        try:
+            minio_client.remove_object(bucket, obj.object_name)
+        except InvalidResponseError as err:
+            raise HTTPException(status_code=500,)
 
 
 def get_user_media_list(username: str):
