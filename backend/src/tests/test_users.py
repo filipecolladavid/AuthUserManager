@@ -5,7 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.config.database import startDB
 from src.config.settings import settings
-from src.models.items import Item
+from src.models.items import Item, Visibility
 from src.utils import delete_minio, hash_password, get_user_media_list, clear_bucket, delete_user_media
 from src.tests.test_utils import login, logout
 from ..models.user import Privileges, User
@@ -263,6 +263,85 @@ async def test_delete_non_existing_user(test_db, client: AsyncClient):
 
     await User.delete_all()
 
+
+"""
+    Get user's post
+"""
+
+
+@pytest.mark.anyio
+async def test_get_users_posts(test_db, client: AsyncClient):
+    # Visitor
+    await user_visitor.create()
+
+    item_all = Item(
+        title="A post for all",
+        desc="A post for all",
+        visibility=Visibility.ALL,
+        author=user_admin.username,
+        pic_url="http://0.0.0.0:9000/media/admin/invalid.png",
+        created_at=datetime.utcnow()
+    )
+
+    item_users = Item(
+        title="A post for users",
+        desc="A post for users",
+        visibility=Visibility.USERS,
+        author=user_admin.username,
+        pic_url="http://0.0.0.0:9000/media/admin/invalid_1.png",
+        created_at=datetime.utcnow()
+    )
+
+    item_admin_vis = Item(
+        title="A post for admins by vis",
+        desc="A post for admins by vis",
+        visibility=Visibility.ADMIN,
+        author=user_visitor.username,
+        pic_url="http://0.0.0.0:9000/media/admin/invalid_2.png",
+        created_at=datetime.utcnow()
+    )
+
+    item_all_vis = Item(
+        title="A post for all by vis",
+        desc="A post for all by vis",
+        visibility=Visibility.ALL,
+        author=user_visitor.username,
+        pic_url="http://0.0.0.0:9000/media/admin/invalid_2.png",
+        created_at=datetime.utcnow()
+    )
+
+    item_admin_cr = Item(
+        title="A post for admins by creator",
+        desc="A post for admins by creator",
+        visibility=Visibility.ADMIN,
+        author=user_creator.username,
+        pic_url="http://0.0.0.0:9000/media/admin/invalid_2.png",
+        created_at=datetime.utcnow()
+    )
+
+    await Item.insert_many([item_all, item_users, item_admin_vis, item_all_vis, item_admin_cr])
+
+    await login(user_visitor.username, "testpassword", client)
+
+    # Get posts by admin
+    response = await client.get("/users/"+user_admin.username+"/posts")
+    assert response.status_code == 200
+    list = response.json()
+    assert len(list) == 1
+
+    for item in list: 
+        if item["visibility"] > Visibility.USERS:
+            assert False
+
+    # get posts by user visitor
+    response = await client.get("/users/"+user_visitor.username+"/posts")
+    assert response.status_code == 200
+    list = response.json()
+    assert len(list) == 2
+
+    for item in list:
+        if item["visibility"] > Visibility.USERS:
+            assert item["author"] == user_visitor.username
 
 """
     Verify

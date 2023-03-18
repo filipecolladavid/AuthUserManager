@@ -14,7 +14,6 @@ router = APIRouter()
 
 
 # Returns posts filtered by who's making the request
-# TODO - add test to check if user gets it's posts
 @router.get('/', response_model=List[Item])
 async def get_all(user_id: str = Depends(oauth2.require_id)):
     if not user_id:

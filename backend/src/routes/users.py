@@ -87,7 +87,7 @@ async def delete_user(username: str, user_id: str = Depends(oauth2.require_user)
 
     return {}
 
-
+# Returns posts made by some user filtred by requesting user privileges - own user get's it's own posts as well
 @router.get(
     '/{username}/posts',
     response_model=List[Item],
@@ -101,19 +101,19 @@ async def get_users_posts(username: str, user_id: str = Depends(oauth2.require_i
         user = await User.get(user_id)
 
         if user.username == username:
-            all_items_cursor = Item.find(Item.username == user.username)
+            all_items_cursor = Item.find(Item.author == user.username)
 
-        if user.privileges <= Privileges.PENDING:
+        elif user.privileges <= Privileges.PENDING:
             all_items_cursor = Item.find(
                 {"$and": [{"visibility": {"$lte": Visibility.ALL}},
                           {"author": user.username}]}
             )
-        if user.privileges >= Privileges.VISITOR:
+        elif user.privileges >= Privileges.VISITOR:
             all_items_cursor = Item.find(
                 {"$and": [{"visibility": {"$lte": Visibility.USERS}},
                           {"author": user.username}]}
             )
-        if user.privileges >= Privileges.ADMIN:
+        elif user.privileges >= Privileges.ADMIN:
             all_items_cursor = Item.find(
                 {"$and": [{"visibility": {"$lte": Visibility.ADMIN}},
                           {"author": user.username}]}
